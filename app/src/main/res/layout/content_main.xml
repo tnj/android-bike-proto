@@ -11,14 +11,86 @@
         tools:showIn="@layout/activity_main">
 
         <TextView
-            android:id="@+id/hello_world"
+            android:id="@+id/height"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Hello World!"
+            android:fontFamily="sans-serif-condensed"
+            android:text="0"
+            android:textAlignment="viewEnd"
+            android:textColor="@color/colorPrimary"
+            android:textSize="24pt"
+            android:minWidth="72dp"
             app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintHorizontal_bias="0.498"
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toRightOf="parent"
-            app:layout_constraintTop_toTopOf="parent"/>
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.499"/>
+
+        <TextView
+            android:id="@+id/height_sub"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-condensed"
+            android:text=".0"
+            android:textAlignment="viewEnd"
+            android:textColor="@color/colorPrimary"
+            app:layout_constraintBaseline_toBaselineOf="@+id/height"
+            app:layout_constraintLeft_toRightOf="@+id/height"/>
+
+        <TextView
+            android:id="@+id/pressure"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginRight="8dp"
+            android:layout_marginTop="8dp"
+            android:fontFamily="sans-serif-condensed"
+            android:text="1010.10"
+            android:textAlignment="viewEnd"
+            app:layout_constraintRight_toLeftOf="@+id/textView2"
+            app:layout_constraintTop_toBottomOf="@+id/height"/>
+
+        <TextView
+            android:id="@+id/temperature"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginRight="8dp"
+            android:layout_marginTop="8dp"
+            android:fontFamily="sans-serif-condensed"
+            android:text="25.0"
+            android:textAlignment="viewEnd"
+            app:layout_constraintRight_toLeftOf="@+id/textView3"
+            app:layout_constraintTop_toBottomOf="@+id/pressure"/>
+
+        <TextView
+            android:id="@+id/textView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="8dp"
+            android:layout_marginStart="8dp"
+            android:fontFamily="sans-serif-condensed"
+            android:text="m"
+            android:textColor="@color/colorPrimary"
+            app:layout_constraintBaseline_toBaselineOf="@+id/height"
+            app:layout_constraintLeft_toRightOf="@+id/height_sub"/>
+
+        <TextView
+            android:id="@+id/textView2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-condensed"
+            android:text="hPa"
+            app:layout_constraintBottom_toBottomOf="@+id/pressure"
+            app:layout_constraintLeft_toLeftOf="@+id/textView"/>
+
+        <TextView
+            android:id="@+id/textView3"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-condensed"
+            android:text="℃"
+            app:layout_constraintBottom_toBottomOf="@+id/temperature"
+            app:layout_constraintLeft_toLeftOf="@+id/textView"/>
 
     </android.support.constraint.ConstraintLayout>
 
