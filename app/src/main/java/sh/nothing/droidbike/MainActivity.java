@@ -53,28 +53,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         hideSystemControls();
     }
 
-    private void hideSystemControls() {
-        View decor = this.getWindow().getDecorView();
-        decor.setSystemUiVisibility(
-            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                | View.SYSTEM_UI_FLAG_FULLSCREEN
-                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
-    }
-
-
-    private Sensor findTemperatureSensor() {
-        List<Sensor> list = sensorManager.getSensorList(Sensor.TYPE_ALL);
-        list.forEach(sensor -> {
-            if ("BMP280 temperature".equals(sensor.getName())) {
-                temperature = sensor;
-                Log.v(TAG, sensor.getName());           // => BMP280 temperature
-                Log.v(TAG, sensor.getStringType());     // => com.google.sensor.internal_temperature
-                Log.v(TAG, "Type=" + sensor.getType()); // => Type=65536
-            }
-        });
-        return temperature;
-    }
-
     @Override
     protected void onStart() {
         super.onStart();
@@ -101,22 +79,50 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         } else if (event.sensor == temperature) {
             lastTemperature = event.values[0];
         }
-
-        binding.content.pressure.setText(String.format(Locale.US, "%.2f", lastPressure));
-        binding.content.temperature.setText(String.format(Locale.US, "%.2f", lastTemperature));
-        String height = String.format(Locale.US, "%.2f", calculateHeight(lastPressure, basePressure, lastTemperature));
-        int pointIndex = height.indexOf('.');
-        binding.content.height.setText(height.substring(0, pointIndex));
-        binding.content.heightSub.setText(height.substring(pointIndex));
-
-    }
-
-    private float calculateHeight(float lastPressure, float basePressure, float lastTemperature) {
-        return (float) (((Math.pow(basePressure / lastPressure, 1 / 5.257) - 1) * (lastTemperature + 273.15)) / 0.0065);
+        updateView();
     }
 
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
 
+    }
+
+    private void updateView() {
+        binding.content.pressure.setText(formatValue(lastPressure));
+        binding.content.temperature.setText(formatValue(lastTemperature));
+
+        String height = formatValue(calculateHeight(lastPressure, basePressure, lastTemperature));
+        int pointIndex = height.indexOf('.');
+        binding.content.height.setText(height.substring(0, pointIndex));
+        binding.content.heightSub.setText(height.substring(pointIndex));
+    }
+
+    private void hideSystemControls() {
+        View decor = this.getWindow().getDecorView();
+        decor.setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+    }
+
+    private Sensor findTemperatureSensor() {
+        List<Sensor> list = sensorManager.getSensorList(Sensor.TYPE_ALL);
+        list.forEach(sensor -> {
+            if ("BMP280 temperature".equals(sensor.getName())) {
+                temperature = sensor;
+                Log.v(TAG, sensor.getName());           // => BMP280 temperature
+                Log.v(TAG, sensor.getStringType());     // => com.google.sensor.internal_temperature
+                Log.v(TAG, "Type=" + sensor.getType()); // => Type=65536
+            }
+        });
+        return temperature;
+    }
+
+    private static String formatValue(float value) {
+        return String.format(Locale.US, "%.1f", value);
+    }
+
+    private static float calculateHeight(float lastPressure, float basePressure, float lastTemperature) {
+        return (float) (((Math.pow(basePressure / lastPressure, 1 / 5.257) - 1) * (lastTemperature + 273.15)) / 0.0065);
     }
 }
