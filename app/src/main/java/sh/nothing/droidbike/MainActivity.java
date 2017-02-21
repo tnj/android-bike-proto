@@ -1,5 +1,6 @@
 package sh.nothing.droidbike;
 
+import android.Manifest;
 import android.content.Context;
 import android.databinding.DataBindingUtil;
 import android.hardware.Sensor;
@@ -7,6 +8,7 @@ import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
@@ -15,8 +17,12 @@ import android.view.View;
 import java.util.List;
 import java.util.Locale;
 
+import permissions.dispatcher.NeedsPermission;
+import permissions.dispatcher.RuntimePermissions;
+import sh.nothing.droidbike.ble.BleManager;
 import sh.nothing.droidbike.databinding.ActivityMainBinding;
 
+@RuntimePermissions
 public class MainActivity extends AppCompatActivity implements SensorEventListener {
 
     private static final String TAG = "MainActivity";
@@ -49,8 +55,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         pressure = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE);
         findTemperatureSensor();
-
         hideSystemControls();
+
     }
 
     @Override
@@ -59,6 +65,19 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         sensorManager.registerListener(this, pressure, SensorManager.SENSOR_DELAY_UI);
         if (temperature != null)
             sensorManager.registerListener(this, temperature, SensorManager.SENSOR_DELAY_NORMAL);
+
+        MainActivityPermissionsDispatcher.startBleScanWithCheck(this);
+    }
+
+    @NeedsPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+    void startBleScan() {
+        new BleManager(this).startScan();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        MainActivityPermissionsDispatcher.onRequestPermissionsResult(this, requestCode, grantResults);
     }
 
     @Override
