@@ -57,8 +57,11 @@ public class BleManager {
     };
     private BluetoothGatt gatt;
     private BluetoothGattCharacteristic characteristic;
+
     private int lastWheelRevolutions;
     private int lastWheelEventTime;
+    private int lastCrankRevolutions;
+    private int lastCrankEventTime;
 
     public BleManager(Context context) {
         this.context = context;
@@ -128,7 +131,7 @@ public class BleManager {
         }
 
 
-        // Heavyly borrowed from https://github.com/NordicSemiconductor/Android-nRF-Toolbox/blob/0b2e3aba170e784ccb1d4ff7eed3212a7f6a084b/app/src/main/java/no/nordicsemi/android/nrftoolbox/csc/CSCManager.java
+        // Heavily borrowed from https://github.com/NordicSemiconductor/Android-nRF-Toolbox/blob/0b2e3aba170e784ccb1d4ff7eed3212a7f6a084b/app/src/main/java/no/nordicsemi/android/nrftoolbox/csc/CSCManager.java
 
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
@@ -142,6 +145,8 @@ public class BleManager {
             final boolean wheelRevPresent = (flags & WHEEL_REVOLUTIONS_DATA_PRESENT) > 0;
             final boolean crankRevPreset = (flags & CRANK_REVOLUTION_DATA_PRESENT) > 0;
 
+            double wheelRpm = 0.0;
+            double crankRpm = 0.0;
             if (wheelRevPresent) {
                 final int wheelRevolutions = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT32, offset);
                 offset += 4;
@@ -149,12 +154,12 @@ public class BleManager {
                 final int wheelEventTime = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, offset); // 1/1024 s
                 offset += 2;
 
-                double rpm = (double) (wheelRevolutions - lastWheelRevolutions) / (wheelEventTime - lastWheelEventTime) * 1024.0 * 60.0;
+                wheelRpm = rpm(wheelRevolutions, lastWheelRevolutions, wheelEventTime, lastWheelEventTime);
                 int length = 2096; // mm
                 Log.d(TAG, "Wheel: #" + wheelRevolutions
                     + " @ " + String.format(Locale.US, "%.2f", (float) wheelEventTime / 1024) + "s / "
-                    + String.format(Locale.US, "%.2f", rpm) + "RPM / "
-                    + String.format(Locale.US, "%.2f", ((rpm * length) * 60 / 1000 / 1000)) + "km/h");
+                    + String.format(Locale.US, "%.2f", wheelRpm) + "RPM / "
+                    + String.format(Locale.US, "%.2f", ((wheelRpm * length) * 60 / 1000 / 1000)) + "km/h");
 
                 lastWheelRevolutions = wheelRevolutions;
                 lastWheelEventTime = wheelEventTime;
@@ -165,11 +170,27 @@ public class BleManager {
                 final int crankRevolutions = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, offset);
                 offset += 2;
 
-                final int lastCrankEventTime = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, offset);
+                final int crankEventTime = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, offset);
                 offset += 2;
 
-                Log.d(TAG, "Crank: #" + crankRevolutions + " @ " + String.format(Locale.US, "%.2f", (float) lastCrankEventTime / 1024) + "s");
+                crankRpm = rpm(crankRevolutions, lastCrankRevolutions, crankEventTime, lastCrankEventTime);
+                Log.d(TAG, "Crank: #" + crankRevolutions
+                    + " @ " + String.format(Locale.US, "%.2f", (float) crankEventTime / 1024) + "s / "
+                    + String.format(Locale.US, "%.2f", crankRpm) + "RPM");
+
+                lastCrankRevolutions = crankRevolutions;
+                lastCrankEventTime = crankEventTime;
             }
+
+            Log.d(TAG, "Gear Ratio: " + String.format(Locale.US, "%.2f", wheelRpm / crankRpm));
         }
+    }
+
+    static double rpm(int newRevolutions, int lastRevolutions, int newTime, int lastTime) {
+        return (double) (newRevolutions - lastRevolutions) / timeDiff(newTime, lastTime) * 1024.0 * 60.0;
+    }
+
+    static int timeDiff(int newTime, int lastTime) {
+        return newTime - lastTime + (newTime < lastTime ? 65535 : 0);
     }
 }
