@@ -19,6 +19,7 @@ import android.view.animation.LinearInterpolator;
 import java.util.List;
 import java.util.Locale;
 
+import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.disposables.CompositeDisposable;
 import permissions.dispatcher.NeedsPermission;
 import permissions.dispatcher.RuntimePermissions;
@@ -67,8 +68,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         hideSystemControls();
 
         cscManager = new CscManager(this);
-        disposables.add(cscManager.observeRevolutions().subscribe(data -> onUpdate(data)));
-        disposables.add(cscManager.observeStatus().subscribe(status -> onConnectionStatusChanged(status)));
+        disposables.add(cscManager.observeRevolutions()
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe(data -> onCscDataUpdate(data))
+        );
+        disposables.add(cscManager.observeStatus()
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe(status -> onCscStatusChanged(status))
+        );
     }
 
     int fpscount = 0;
@@ -141,25 +148,23 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     }
 
-    public void onUpdate(CscManager.CscData data) {
-        runOnUiThread(() -> {
-            float currentValue = (Float) speedAnimator.getAnimatedValue();
-            float newValue = calculateSpeed(data.getWheelRpm());
-            if (Math.abs(currentValue - newValue) >= 0.01f) {
-                if (currentValue > newValue) {
-                    if (currentValue / newValue > 1.2f) {
-                        currentValue = newValue * 1.2f;
-                    }
-                } else {
-                    if (newValue / currentValue > 1.2f) {
-                        currentValue = newValue / 1.2f;
-                    }
+    public void onCscDataUpdate(CscManager.CscData data) {
+        float currentValue = (Float) speedAnimator.getAnimatedValue();
+        float newValue = calculateSpeed(data.getWheelRpm());
+        if (Math.abs(currentValue - newValue) >= 0.01f) {
+            if (currentValue > newValue) {
+                if (currentValue / newValue > 1.2f) {
+                    currentValue = newValue * 1.2f;
                 }
-                speedAnimator.setFloatValues(currentValue, newValue);
-                speedAnimator.start();
+            } else {
+                if (newValue / currentValue > 1.2f) {
+                    currentValue = newValue / 1.2f;
+                }
             }
-            binding.content.cadence.setText(String.format(Locale.US, "%.1f", data.getCrankRpm()));
-        });
+            speedAnimator.setFloatValues(currentValue, newValue);
+            speedAnimator.start();
+        }
+        binding.content.cadence.setText(String.format(Locale.US, "%.1f", data.getCrankRpm()));
     }
 
     private float calculateSpeed(float wheelRpm) {
@@ -170,12 +175,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         return 2096;
     }
 
-    public void onConnectionStatusChanged(CscManager.Status status) {
-        runOnUiThread(() -> {
-            binding.content.connectionIndicator1.setImageResource(status.isSearching() ? R.drawable.indicator : R.drawable.indicator_inactive);
-            binding.content.connectionIndicator2.setImageResource(status.isFound() ? R.drawable.indicator : R.drawable.indicator_inactive);
-            binding.content.connectionIndicator3.setImageResource(status.isConnected() ? R.drawable.indicator : R.drawable.indicator_inactive);
-        });
+    public void onCscStatusChanged(CscManager.Status status) {
+        binding.content.connectionIndicator1.setImageResource(status.isSearching() ? R.drawable.indicator : R.drawable.indicator_inactive);
+        binding.content.connectionIndicator2.setImageResource(status.isFound() ? R.drawable.indicator : R.drawable.indicator_inactive);
+        binding.content.connectionIndicator3.setImageResource(status.isConnected() ? R.drawable.indicator : R.drawable.indicator_inactive);
     }
 
     @NeedsPermission(Manifest.permission.ACCESS_FINE_LOCATION)
