@@ -11,25 +11,22 @@ import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
-import android.support.v4.animation.AnimatorCompatHelper;
-import android.support.v4.animation.ValueAnimatorCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
-import android.view.animation.AccelerateInterpolator;
 import android.view.animation.LinearInterpolator;
-import android.view.animation.OvershootInterpolator;
 
 import java.util.List;
 import java.util.Locale;
 
+import io.reactivex.disposables.CompositeDisposable;
 import permissions.dispatcher.NeedsPermission;
 import permissions.dispatcher.RuntimePermissions;
 import sh.nothing.droidbike.ble.CscManager;
 import sh.nothing.droidbike.databinding.ActivityMainBinding;
 
 @RuntimePermissions
-public class MainActivity extends AppCompatActivity implements SensorEventListener, CscManager.CscManagerCallback {
+public class MainActivity extends AppCompatActivity implements SensorEventListener {
 
     private static final String TAG = "MainActivity";
     private SensorManager sensorManager;
@@ -46,6 +43,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private CscManager cscManager;
     private ValueAnimator speedAnimator;
 
+    CompositeDisposable disposables = new CompositeDisposable();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,8 +67,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         hideSystemControls();
 
         cscManager = new CscManager(this);
-        cscManager.registerCallback(this);
-
+        disposables.add(cscManager.observeRevolutions().subscribe(data -> onUpdate(data)));
+        disposables.add(cscManager.observeStatus().subscribe(status -> onConnectionStatusChanged(status)));
     }
 
     int fpscount = 0;
@@ -89,13 +87,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         speedAnimator.setDuration(1000);
         speedAnimator.setInterpolator(new LinearInterpolator());
         speedAnimator.addUpdateListener((animation) -> {
-            binding.content.speed.setText(String.format(Locale.US, "%.1f", (Float)animation.getAnimatedValue()));
+            binding.content.speed.setText(String.format(Locale.US, "%.1f", (Float) animation.getAnimatedValue()));
 
             fpscount++;
             long current = System.nanoTime();
             long diff = current - fpsstart;
             if (diff > 1_000_000_000) {
-                Log.v(TAG, "fps=" + String.format(Locale.US, "%.1f", (float)fpscount / (diff / 1_000_000_000.0)));
+                Log.v(TAG, "fps=" + String.format(Locale.US, "%.1f", (float) fpscount / (diff / 1_000_000_000.0)));
                 fpscount = 0;
                 fpsstart = current;
             }
@@ -120,6 +118,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
 
     @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        disposables.clear();
+    }
+
+    @Override
     public void onSensorChanged(SensorEvent event) {
         if (event.sensor == pressure) {
             lastRawPressure = event.values[0];
@@ -137,11 +141,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     }
 
-    @Override
-    public void onUpdate(int wheelRevolutions, float wheelRpm, int cranksRevolutions, float crankRpm) {
+    public void onUpdate(CscManager.CscData data) {
         runOnUiThread(() -> {
             float currentValue = (Float) speedAnimator.getAnimatedValue();
-            float newValue = calculateSpeed(wheelRpm);
+            float newValue = calculateSpeed(data.getWheelRpm());
             if (Math.abs(currentValue - newValue) >= 0.01f) {
                 if (currentValue > newValue) {
                     if (currentValue / newValue > 1.2f) {
@@ -155,7 +158,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 speedAnimator.setFloatValues(currentValue, newValue);
                 speedAnimator.start();
             }
-            binding.content.cadence.setText(String.format(Locale.US, "%.1f", crankRpm));
+            binding.content.cadence.setText(String.format(Locale.US, "%.1f", data.getCrankRpm()));
         });
     }
 
@@ -167,12 +170,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         return 2096;
     }
 
-    @Override
-    public void onConnectionStatusChanged(boolean searching, boolean found, boolean connected) {
+    public void onConnectionStatusChanged(CscManager.Status status) {
         runOnUiThread(() -> {
-            binding.content.connectionIndicator1.setImageResource(searching ? R.drawable.indicator : R.drawable.indicator_inactive);
-            binding.content.connectionIndicator2.setImageResource(found ? R.drawable.indicator : R.drawable.indicator_inactive);
-            binding.content.connectionIndicator3.setImageResource(connected ? R.drawable.indicator : R.drawable.indicator_inactive);
+            binding.content.connectionIndicator1.setImageResource(status.isSearching() ? R.drawable.indicator : R.drawable.indicator_inactive);
+            binding.content.connectionIndicator2.setImageResource(status.isFound() ? R.drawable.indicator : R.drawable.indicator_inactive);
+            binding.content.connectionIndicator3.setImageResource(status.isConnected() ? R.drawable.indicator : R.drawable.indicator_inactive);
         });
     }
 

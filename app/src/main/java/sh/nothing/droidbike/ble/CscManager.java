@@ -24,6 +24,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
+import io.reactivex.Flowable;
+import io.reactivex.processors.PublishProcessor;
+
 /**
  * Created by tnj on 2/19/17.
  */
@@ -52,19 +55,27 @@ public class CscManager {
                 Log.v("BLEScan", result.toString());
                 initWithDevice(result.getDevice());
                 bluetoothLeScanner.stopScan(this);
+                setScanning(false);
             }
         }
     };
     private BluetoothGatt gatt;
     private BluetoothGattCharacteristic characteristic;
 
-    private int lastWheelRevolutions;
-    private int lastWheelEventTime;
-    private int lastCrankRevolutions;
-    private int lastCrankEventTime;
-    private boolean scanning;
-    private boolean connected;
-    private boolean found;
+    private CscData lastCscData = new CscData();
+    private Status lastStatus = new Status();
+
+    private PublishProcessor<CscData> dataPublishProcessor = PublishProcessor.create();
+    private Flowable<CscData> revolutionsObservable = dataPublishProcessor
+        .onBackpressureLatest()
+        .replay(1)
+        .refCount();
+    private PublishProcessor<Status> statusPublishProcessor = PublishProcessor.create();
+    private Flowable<Status> statusObservable = statusPublishProcessor
+        .onBackpressureLatest()
+        .replay(1)
+        .refCount();
+
 
     public CscManager(Context context) {
         this.context = context;
@@ -103,29 +114,19 @@ public class CscManager {
         setFound(true);
     }
 
-    private CscManagerCallback cscCallback;
-    public void registerCallback(CscManagerCallback callback) {
-        cscCallback = callback;
-    }
-
     void setScanning(boolean scanning) {
-        this.scanning = scanning;
-        doConnectionStatusCallback();
+        lastStatus.searching = scanning;
+        statusPublishProcessor.onNext(lastStatus);
     }
 
     void setConnected(boolean connected) {
-        this.connected = connected;
-        doConnectionStatusCallback();
+        lastStatus.connected = connected;
+        statusPublishProcessor.onNext(lastStatus);
     }
 
     void setFound(boolean found) {
-        this.found = found;
-        doConnectionStatusCallback();
-    }
-
-    private void doConnectionStatusCallback() {
-        if (cscCallback != null)
-            cscCallback.onConnectionStatusChanged(scanning, found, connected);
+        lastStatus.found = found;
+        statusPublishProcessor.onNext(lastStatus);
     }
 
     class GattCallback extends BluetoothGattCallback {
@@ -163,7 +164,6 @@ public class CscManager {
             }
         }
 
-
         // Heavily borrowed from https://github.com/NordicSemiconductor/Android-nRF-Toolbox/blob/0b2e3aba170e784ccb1d4ff7eed3212a7f6a084b/app/src/main/java/no/nordicsemi/android/nrftoolbox/csc/CSCManager.java
 
         @Override
@@ -178,8 +178,6 @@ public class CscManager {
             final boolean wheelRevPresent = (flags & WHEEL_REVOLUTIONS_DATA_PRESENT) > 0;
             final boolean crankRevPreset = (flags & CRANK_REVOLUTION_DATA_PRESENT) > 0;
 
-            float wheelRpm = 0.0f;
-            float crankRpm = 0.0f;
             if (wheelRevPresent) {
                 final int wheelRevolutions = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT32, offset);
                 offset += 4;
@@ -187,20 +185,20 @@ public class CscManager {
                 final int wheelEventTime = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, offset); // 1/1024 s
                 offset += 2;
 
-                if (lastWheelRevolutions == 0) {
-                    lastWheelRevolutions = wheelRevolutions;
-                    lastWheelEventTime = wheelEventTime;
+                if (lastCscData.wheelRevolutions == 0) {
+                    lastCscData.wheelRevolutions = wheelRevolutions;
+                    lastCscData.wheelEventTime = wheelEventTime;
                 }
 
-                wheelRpm = rpm(wheelRevolutions, lastWheelRevolutions, wheelEventTime, lastWheelEventTime);
+                lastCscData.wheelRpm = rpm(wheelRevolutions, lastCscData.wheelRevolutions, wheelEventTime, lastCscData.wheelEventTime);
                 int length = 2096; // mm
                 Log.d(TAG, "Wheel: #" + wheelRevolutions
                     + " @ " + String.format(Locale.US, "%.2f", (float) wheelEventTime / 1024) + "s / "
-                    + String.format(Locale.US, "%.2f", wheelRpm) + "RPM / "
-                    + String.format(Locale.US, "%.2f", ((wheelRpm * length) * 60 / 1000 / 1000)) + "km/h");
+                    + String.format(Locale.US, "%.2f", lastCscData.wheelRpm) + "RPM / "
+                    + String.format(Locale.US, "%.2f", ((lastCscData.wheelRpm * length) * 60 / 1000 / 1000)) + "km/h");
 
-                lastWheelRevolutions = wheelRevolutions;
-                lastWheelEventTime = wheelEventTime;
+                lastCscData.wheelRevolutions = wheelRevolutions;
+                lastCscData.wheelEventTime = wheelEventTime;
 
             }
 
@@ -211,24 +209,23 @@ public class CscManager {
                 final int crankEventTime = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, offset);
                 offset += 2;
 
-                if (lastCrankRevolutions == 0) {
-                    lastCrankRevolutions = crankRevolutions;
-                    lastCrankEventTime = crankEventTime;
+                if (lastCscData.crankRevolutions == 0) {
+                    lastCscData.crankRevolutions = crankRevolutions;
+                    lastCscData.crankEventTime = crankEventTime;
                 }
 
-                crankRpm = rpm(crankRevolutions, lastCrankRevolutions, crankEventTime, lastCrankEventTime);
+                lastCscData.crankRpm = rpm(crankRevolutions, lastCscData.crankRevolutions, crankEventTime, lastCscData.crankEventTime);
                 Log.d(TAG, "Crank: #" + crankRevolutions
                     + " @ " + String.format(Locale.US, "%.2f", (float) crankEventTime / 1024) + "s / "
-                    + String.format(Locale.US, "%.2f", crankRpm) + "RPM");
+                    + String.format(Locale.US, "%.2f", lastCscData.crankRpm) + "RPM");
 
-                lastCrankRevolutions = crankRevolutions;
-                lastCrankEventTime = crankEventTime;
+                lastCscData.crankRevolutions = crankRevolutions;
+                lastCscData.crankEventTime = crankEventTime;
             }
 
-            Log.d(TAG, "Gear Ratio: " + String.format(Locale.US, "%.2f", wheelRpm / crankRpm));
+            Log.d(TAG, "Gear Ratio: " + String.format(Locale.US, "%.2f", lastCscData.wheelRpm / lastCscData.crankRpm));
 
-            if (cscCallback != null)
-                cscCallback.onUpdate(lastWheelRevolutions, wheelRpm, lastCrankRevolutions, crankRpm);
+            dataPublishProcessor.onNext(lastCscData);
         }
     }
 
@@ -243,8 +240,62 @@ public class CscManager {
         return newTime - lastTime + (newTime < lastTime ? 65535 : 0);
     }
 
-    public interface CscManagerCallback {
-        void onUpdate(int wheelRevolutions, float wheelRpm, int cranksRevolutions, float crankRpm);
-        void onConnectionStatusChanged(boolean searching, boolean found, boolean connected);
+    public Flowable<CscData> observeRevolutions() {
+        return revolutionsObservable;
+    }
+
+    public Flowable<Status> observeStatus() {
+        return statusObservable;
+    }
+
+    public class CscData {
+        int wheelEventTime;
+        int wheelRevolutions;
+        float wheelRpm;
+        int crankEventTime;
+        int crankRevolutions;
+        float crankRpm;
+
+        public int getWheelEventTime() {
+            return wheelEventTime;
+        }
+
+        public int getWheelRevolutions() {
+            return wheelRevolutions;
+        }
+
+        public float getWheelRpm() {
+            return wheelRpm;
+        }
+
+        public int getCrankEventTime() {
+            return crankEventTime;
+        }
+
+        public int getCrankRevolutions() {
+            return crankRevolutions;
+        }
+
+        public float getCrankRpm() {
+            return crankRpm;
+        }
+    }
+
+    public class Status {
+        boolean searching;
+        boolean found;
+        boolean connected;
+
+        public boolean isSearching() {
+            return searching;
+        }
+
+        public boolean isFound() {
+            return found;
+        }
+
+        public boolean isConnected() {
+            return connected;
+        }
     }
 }
