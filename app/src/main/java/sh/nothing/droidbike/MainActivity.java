@@ -1,6 +1,7 @@
 package sh.nothing.droidbike;
 
 import android.Manifest;
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.databinding.DataBindingUtil;
 import android.hardware.Sensor;
@@ -10,20 +11,25 @@ import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
+import android.support.v4.animation.AnimatorCompatHelper;
+import android.support.v4.animation.ValueAnimatorCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
+import android.view.animation.AccelerateInterpolator;
+import android.view.animation.LinearInterpolator;
+import android.view.animation.OvershootInterpolator;
 
 import java.util.List;
 import java.util.Locale;
 
 import permissions.dispatcher.NeedsPermission;
 import permissions.dispatcher.RuntimePermissions;
-import sh.nothing.droidbike.ble.BleManager;
+import sh.nothing.droidbike.ble.CscManager;
 import sh.nothing.droidbike.databinding.ActivityMainBinding;
 
 @RuntimePermissions
-public class MainActivity extends AppCompatActivity implements SensorEventListener {
+public class MainActivity extends AppCompatActivity implements SensorEventListener, CscManager.CscManagerCallback {
 
     private static final String TAG = "MainActivity";
     private SensorManager sensorManager;
@@ -35,6 +41,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     float lastPressure = 0.0f;
     float lastRawPressure = 0.0f;
     float lastTemperature = 25.0f;
+
+    // CSC data
+    private CscManager cscManager;
+    private ValueAnimator speedAnimator;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,7 +68,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         findTemperatureSensor();
         hideSystemControls();
 
+        cscManager = new CscManager(this);
+        cscManager.registerCallback(this);
+
     }
+
+    int fpscount = 0;
+    long fpsstart = 0;
 
     @Override
     protected void onStart() {
@@ -67,11 +84,23 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             sensorManager.registerListener(this, temperature, SensorManager.SENSOR_DELAY_NORMAL);
 
         MainActivityPermissionsDispatcher.startBleScanWithCheck(this);
-    }
 
-    @NeedsPermission(Manifest.permission.ACCESS_FINE_LOCATION)
-    void startBleScan() {
-        new BleManager(this).startScan();
+        speedAnimator = ValueAnimator.ofFloat(0.0f, 0.0f);
+        speedAnimator.setDuration(1000);
+        speedAnimator.setInterpolator(new LinearInterpolator());
+        speedAnimator.addUpdateListener((animation) -> {
+            binding.content.speed.setText(String.format(Locale.US, "%.1f", (Float)animation.getAnimatedValue()));
+
+            fpscount++;
+            long current = System.nanoTime();
+            long diff = current - fpsstart;
+            if (diff > 1_000_000_000) {
+                Log.v(TAG, "fps=" + String.format(Locale.US, "%.1f", (float)fpscount / (diff / 1_000_000_000.0)));
+                fpscount = 0;
+                fpsstart = current;
+            }
+        });
+        speedAnimator.start();
     }
 
     @Override
@@ -86,6 +115,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         sensorManager.unregisterListener(this, pressure);
         if (temperature != null)
             sensorManager.unregisterListener(this, temperature);
+
+        stopBleScan();
     }
 
     @Override
@@ -104,6 +135,54 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
 
+    }
+
+    @Override
+    public void onUpdate(int wheelRevolutions, float wheelRpm, int cranksRevolutions, float crankRpm) {
+        runOnUiThread(() -> {
+            float currentValue = (Float) speedAnimator.getAnimatedValue();
+            float newValue = calculateSpeed(wheelRpm);
+            if (Math.abs(currentValue - newValue) >= 0.01f) {
+                if (currentValue > newValue) {
+                    if (currentValue / newValue > 1.2f) {
+                        currentValue = newValue * 1.2f;
+                    }
+                } else {
+                    if (newValue / currentValue > 1.2f) {
+                        currentValue = newValue / 1.2f;
+                    }
+                }
+                speedAnimator.setFloatValues(currentValue, newValue);
+                speedAnimator.start();
+            }
+            binding.content.cadence.setText(String.format(Locale.US, "%.1f", crankRpm));
+        });
+    }
+
+    private float calculateSpeed(float wheelRpm) {
+        return (wheelRpm * getDiameter() * 60 / 1000 / 1000);
+    }
+
+    public int getDiameter() {
+        return 2096;
+    }
+
+    @Override
+    public void onConnectionStatusChanged(boolean searching, boolean found, boolean connected) {
+        runOnUiThread(() -> {
+            binding.content.connectionIndicator1.setImageResource(searching ? R.drawable.indicator : R.drawable.indicator_inactive);
+            binding.content.connectionIndicator2.setImageResource(found ? R.drawable.indicator : R.drawable.indicator_inactive);
+            binding.content.connectionIndicator3.setImageResource(connected ? R.drawable.indicator : R.drawable.indicator_inactive);
+        });
+    }
+
+    @NeedsPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+    void startBleScan() {
+        cscManager.startScan();
+    }
+
+    void stopBleScan() {
+        cscManager.stopScan();
     }
 
     private void updateView() {

@@ -28,7 +28,7 @@ import java.util.UUID;
  * Created by tnj on 2/19/17.
  */
 
-public class BleManager {
+public class CscManager {
 
     private static final String TAG = "BLEManager";
 
@@ -62,8 +62,11 @@ public class BleManager {
     private int lastWheelEventTime;
     private int lastCrankRevolutions;
     private int lastCrankEventTime;
+    private boolean scanning;
+    private boolean connected;
+    private boolean found;
 
-    public BleManager(Context context) {
+    public CscManager(Context context) {
         this.context = context;
         BluetoothManager bluetoothManager = (BluetoothManager) context.getSystemService(Context.BLUETOOTH_SERVICE);
         BluetoothAdapter bluetoothAdapter = bluetoothManager.getAdapter();
@@ -86,15 +89,43 @@ public class BleManager {
 
         Log.v(TAG, "startScan");
         bluetoothLeScanner.startScan(filters, settings, callback);
+        setScanning(true);
     }
 
     public void stopScan() {
         bluetoothLeScanner.stopScan(callback);
+        setScanning(false);
     }
 
     private void initWithDevice(BluetoothDevice device) {
         this.device = device;
         gatt = device.connectGatt(context, false, new GattCallback());
+        setFound(true);
+    }
+
+    private CscManagerCallback cscCallback;
+    public void registerCallback(CscManagerCallback callback) {
+        cscCallback = callback;
+    }
+
+    void setScanning(boolean scanning) {
+        this.scanning = scanning;
+        doConnectionStatusCallback();
+    }
+
+    void setConnected(boolean connected) {
+        this.connected = connected;
+        doConnectionStatusCallback();
+    }
+
+    void setFound(boolean found) {
+        this.found = found;
+        doConnectionStatusCallback();
+    }
+
+    private void doConnectionStatusCallback() {
+        if (cscCallback != null)
+            cscCallback.onConnectionStatusChanged(scanning, found, connected);
     }
 
     class GattCallback extends BluetoothGattCallback {
@@ -104,9 +135,11 @@ public class BleManager {
                 case BluetoothProfile.STATE_CONNECTED:
                     Log.v("GattCallback", "STATE_CONNECTED");
                     gatt.discoverServices();
+                    setConnected(true);
                     break;
                 case BluetoothProfile.STATE_DISCONNECTED:
                     Log.e("GattCallback", "STATE_DISCONNECTED");
+                    setConnected(false);
                     break;
                 default:
                     Log.e("GattCallback", "newState=" + newState);
@@ -145,14 +178,19 @@ public class BleManager {
             final boolean wheelRevPresent = (flags & WHEEL_REVOLUTIONS_DATA_PRESENT) > 0;
             final boolean crankRevPreset = (flags & CRANK_REVOLUTION_DATA_PRESENT) > 0;
 
-            double wheelRpm = 0.0;
-            double crankRpm = 0.0;
+            float wheelRpm = 0.0f;
+            float crankRpm = 0.0f;
             if (wheelRevPresent) {
                 final int wheelRevolutions = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT32, offset);
                 offset += 4;
 
                 final int wheelEventTime = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, offset); // 1/1024 s
                 offset += 2;
+
+                if (lastWheelRevolutions == 0) {
+                    lastWheelRevolutions = wheelRevolutions;
+                    lastWheelEventTime = wheelEventTime;
+                }
 
                 wheelRpm = rpm(wheelRevolutions, lastWheelRevolutions, wheelEventTime, lastWheelEventTime);
                 int length = 2096; // mm
@@ -173,6 +211,11 @@ public class BleManager {
                 final int crankEventTime = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, offset);
                 offset += 2;
 
+                if (lastCrankRevolutions == 0) {
+                    lastCrankRevolutions = crankRevolutions;
+                    lastCrankEventTime = crankEventTime;
+                }
+
                 crankRpm = rpm(crankRevolutions, lastCrankRevolutions, crankEventTime, lastCrankEventTime);
                 Log.d(TAG, "Crank: #" + crankRevolutions
                     + " @ " + String.format(Locale.US, "%.2f", (float) crankEventTime / 1024) + "s / "
@@ -183,14 +226,25 @@ public class BleManager {
             }
 
             Log.d(TAG, "Gear Ratio: " + String.format(Locale.US, "%.2f", wheelRpm / crankRpm));
+
+            if (cscCallback != null)
+                cscCallback.onUpdate(lastWheelRevolutions, wheelRpm, lastCrankRevolutions, crankRpm);
         }
     }
 
-    static double rpm(int newRevolutions, int lastRevolutions, int newTime, int lastTime) {
-        return (double) (newRevolutions - lastRevolutions) / timeDiff(newTime, lastTime) * 1024.0 * 60.0;
+    static float rpm(int newRevolutions, int lastRevolutions, int newTime, int lastTime) {
+        int diff = timeDiff(newTime, lastTime);
+        if (diff == 0)
+            return 0.0f;
+        return (float) (newRevolutions - lastRevolutions) / diff * 1024.0f * 60.0f;
     }
 
     static int timeDiff(int newTime, int lastTime) {
         return newTime - lastTime + (newTime < lastTime ? 65535 : 0);
+    }
+
+    public interface CscManagerCallback {
+        void onUpdate(int wheelRevolutions, float wheelRpm, int cranksRevolutions, float crankRpm);
+        void onConnectionStatusChanged(boolean searching, boolean found, boolean connected);
     }
 }
