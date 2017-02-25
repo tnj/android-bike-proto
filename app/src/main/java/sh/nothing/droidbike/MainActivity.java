@@ -11,14 +11,13 @@ import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
-import android.support.v4.animation.AnimatorCompatHelper;
-import android.support.v4.animation.ValueAnimatorCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
-import android.view.animation.AccelerateInterpolator;
+import android.view.animation.DecelerateInterpolator;
+import android.view.animation.Interpolator;
 import android.view.animation.LinearInterpolator;
-import android.view.animation.OvershootInterpolator;
+import android.widget.TextView;
 
 import java.util.List;
 import java.util.Locale;
@@ -44,8 +43,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     // CSC data
     private CscManager cscManager;
-    private ValueAnimator speedAnimator;
 
+    private ValueAnimator speedAnimator;
+    private ValueAnimator cadenceAnimator;
+    private Interpolator normalInterpolator = new LinearInterpolator();
+    private Interpolator fastInterpolator = new DecelerateInterpolator();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -85,22 +87,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         MainActivityPermissionsDispatcher.startBleScanWithCheck(this);
 
-        speedAnimator = ValueAnimator.ofFloat(0.0f, 0.0f);
-        speedAnimator.setDuration(1000);
-        speedAnimator.setInterpolator(new LinearInterpolator());
-        speedAnimator.addUpdateListener((animation) -> {
-            binding.content.speed.setText(String.format(Locale.US, "%.1f", (Float)animation.getAnimatedValue()));
-
-            fpscount++;
-            long current = System.nanoTime();
-            long diff = current - fpsstart;
-            if (diff > 1_000_000_000) {
-                Log.v(TAG, "fps=" + String.format(Locale.US, "%.1f", (float)fpscount / (diff / 1_000_000_000.0)));
-                fpscount = 0;
-                fpsstart = current;
-            }
-        });
-        speedAnimator.start();
+        speedAnimator = initAnimator(binding.content.speed);
+        cadenceAnimator = initAnimator(binding.content.cadence);
     }
 
     @Override
@@ -140,23 +128,49 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     public void onUpdate(int wheelRevolutions, float wheelRpm, int cranksRevolutions, float crankRpm) {
         runOnUiThread(() -> {
-            float currentValue = (Float) speedAnimator.getAnimatedValue();
-            float newValue = calculateSpeed(wheelRpm);
-            if (Math.abs(currentValue - newValue) >= 0.01f) {
-                if (currentValue > newValue) {
-                    if (currentValue / newValue > 1.2f) {
-                        currentValue = newValue * 1.2f;
-                    }
-                } else {
-                    if (newValue / currentValue > 1.2f) {
-                        currentValue = newValue / 1.2f;
-                    }
-                }
-                speedAnimator.setFloatValues(currentValue, newValue);
-                speedAnimator.start();
-            }
-            binding.content.cadence.setText(String.format(Locale.US, "%.1f", crankRpm));
+            setAnimatorValue(speedAnimator, calculateSpeed(wheelRpm));
+            setAnimatorValue(cadenceAnimator, crankRpm);
         });
+    }
+
+    private ValueAnimator initAnimator(TextView view) {
+        ValueAnimator animator = ValueAnimator.ofFloat(0.0f, 0.0f);
+        animator.setDuration(1000);
+        animator.setInterpolator(new LinearInterpolator());
+        animator.addUpdateListener((animation) -> {
+            view.setText(String.format(Locale.US, "%.1f", (Float) animation.getAnimatedValue()));
+
+            fpscount++;
+            long current = System.nanoTime();
+            long diff = current - fpsstart;
+            if (diff > 1_000_000_000) {
+                Log.v(TAG, "fps=" + String.format(Locale.US, "%.1f", (float) fpscount / (diff / 1_000_000_000.0)));
+                fpscount = 0;
+                fpsstart = current;
+            }
+        });
+        animator.start();
+        return animator;
+    }
+
+    private void setAnimatorValue(ValueAnimator animator, float newValue) {
+        float currentValue = (Float) animator.getAnimatedValue();
+        if (Math.abs(currentValue - newValue) >= 0.01f) {
+            animator.setInterpolator(normalInterpolator);
+            if (currentValue > newValue) {
+                if (currentValue / newValue > 1.2f) {
+                    currentValue = newValue * 1.2f;
+                    animator.setInterpolator(fastInterpolator);
+                }
+            } else {
+                if (newValue / currentValue > 1.2f) {
+                    currentValue = newValue / 1.2f;
+                    animator.setInterpolator(fastInterpolator);
+                }
+            }
+            animator.setFloatValues(currentValue, newValue);
+            animator.start();
+        }
     }
 
     private float calculateSpeed(float wheelRpm) {
@@ -178,11 +192,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     @NeedsPermission(Manifest.permission.ACCESS_FINE_LOCATION)
     void startBleScan() {
-        cscManager.startScan();
+        if (!cscManager.connect())
+            cscManager.startScan();
     }
 
     void stopBleScan() {
-        cscManager.stopScan();
+        if (!cscManager.disconnect())
+            cscManager.stopScan();
     }
 
     private void updateView() {

@@ -60,11 +60,15 @@ public class CscManager {
 
     private int lastWheelRevolutions;
     private int lastWheelEventTime;
+    private long lastWheelEventRealTime;
     private int lastCrankRevolutions;
     private int lastCrankEventTime;
+    private long lastCrankEventRealTime;
     private boolean scanning;
     private boolean connected;
     private boolean found;
+    private float lastWheelRpm;
+    private float lastCrankRpm;
 
     public CscManager(Context context) {
         this.context = context;
@@ -97,6 +101,23 @@ public class CscManager {
         setScanning(false);
     }
 
+    public boolean connect() {
+        if (gatt != null) {
+            // reconnect
+            gatt.connect();
+            return true;
+        }
+        return false;
+    }
+
+    public boolean disconnect() {
+        if (gatt != null) {
+            gatt.close();
+            return true;
+        }
+        return false;
+    }
+
     private void initWithDevice(BluetoothDevice device) {
         this.device = device;
         gatt = device.connectGatt(context, false, new GattCallback());
@@ -104,6 +125,7 @@ public class CscManager {
     }
 
     private CscManagerCallback cscCallback;
+
     public void registerCallback(CscManagerCallback callback) {
         cscCallback = callback;
     }
@@ -134,7 +156,8 @@ public class CscManager {
             switch (newState) {
                 case BluetoothProfile.STATE_CONNECTED:
                     Log.v("GattCallback", "STATE_CONNECTED");
-                    gatt.discoverServices();
+                    if (characteristic == null)
+                        gatt.discoverServices();
                     setConnected(true);
                     break;
                 case BluetoothProfile.STATE_DISCONNECTED:
@@ -178,6 +201,7 @@ public class CscManager {
             final boolean wheelRevPresent = (flags & WHEEL_REVOLUTIONS_DATA_PRESENT) > 0;
             final boolean crankRevPreset = (flags & CRANK_REVOLUTION_DATA_PRESENT) > 0;
 
+            long realTime = System.nanoTime();
             float wheelRpm = 0.0f;
             float crankRpm = 0.0f;
             if (wheelRevPresent) {
@@ -187,12 +211,16 @@ public class CscManager {
                 final int wheelEventTime = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, offset); // 1/1024 s
                 offset += 2;
 
-                if (lastWheelRevolutions == 0) {
-                    lastWheelRevolutions = wheelRevolutions;
-                    lastWheelEventTime = wheelEventTime;
+                if (lastWheelRevolutions == wheelRevolutions) {
+                    float elapsed = (float) ((realTime - lastWheelEventRealTime) / 1_000_000_000.0);
+                    float secondsNeeded = (60.0f / lastWheelRpm);
+                    if (secondsNeeded * 1.2 > elapsed)
+                        wheelRpm = lastWheelRpm;
+                } else if (lastWheelRevolutions != 0) {
+                    wheelRpm = rpm(wheelRevolutions, lastWheelRevolutions, wheelEventTime, lastWheelEventTime);
+                    lastWheelEventRealTime = realTime;
                 }
 
-                wheelRpm = rpm(wheelRevolutions, lastWheelRevolutions, wheelEventTime, lastWheelEventTime);
                 int length = 2096; // mm
                 Log.d(TAG, "Wheel: #" + wheelRevolutions
                     + " @ " + String.format(Locale.US, "%.2f", (float) wheelEventTime / 1024) + "s / "
@@ -201,7 +229,7 @@ public class CscManager {
 
                 lastWheelRevolutions = wheelRevolutions;
                 lastWheelEventTime = wheelEventTime;
-
+                lastWheelRpm = wheelRpm;
             }
 
             if (crankRevPreset) {
@@ -211,18 +239,23 @@ public class CscManager {
                 final int crankEventTime = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, offset);
                 offset += 2;
 
-                if (lastCrankRevolutions == 0) {
-                    lastCrankRevolutions = crankRevolutions;
-                    lastCrankEventTime = crankEventTime;
+                if (lastCrankRevolutions == crankRevolutions) {
+                    float elapsed = (float) ((realTime - lastCrankEventRealTime) / 1_000_000_000.0);
+                    float secondsNeeded = (60.0f / lastCrankRpm);
+                    if (secondsNeeded * 1.2 > elapsed)
+                        crankRpm = lastCrankRpm;
+                } else if (lastCrankRevolutions != 0) {
+                    crankRpm = rpm(crankRevolutions, lastCrankRevolutions, crankEventTime, lastCrankEventTime);
+                    lastCrankEventRealTime = realTime;
                 }
 
-                crankRpm = rpm(crankRevolutions, lastCrankRevolutions, crankEventTime, lastCrankEventTime);
                 Log.d(TAG, "Crank: #" + crankRevolutions
                     + " @ " + String.format(Locale.US, "%.2f", (float) crankEventTime / 1024) + "s / "
                     + String.format(Locale.US, "%.2f", crankRpm) + "RPM");
 
                 lastCrankRevolutions = crankRevolutions;
                 lastCrankEventTime = crankEventTime;
+                lastCrankRpm = crankRpm;
             }
 
             Log.d(TAG, "Gear Ratio: " + String.format(Locale.US, "%.2f", wheelRpm / crankRpm));
@@ -245,6 +278,7 @@ public class CscManager {
 
     public interface CscManagerCallback {
         void onUpdate(int wheelRevolutions, float wheelRpm, int cranksRevolutions, float crankRpm);
+
         void onConnectionStatusChanged(boolean searching, boolean found, boolean connected);
     }
 }
