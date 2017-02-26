@@ -12,8 +12,6 @@ import android.util.TypedValue;
 import android.view.View;
 import android.view.animation.LinearInterpolator;
 
-import static android.R.attr.x;
-
 /**
  * Created by tnj on 2/26/17.
  */
@@ -55,7 +53,7 @@ public class CircularRevolutionsView extends View {
         long lastDuartion = animator.getDuration();
         long newDuration = (long) (60000 / rpm);
         animator.setDuration(newDuration);
-        animator.setCurrentPlayTime((long)(playTime * ((double)newDuration/lastDuartion)));
+        animator.setCurrentPlayTime((long) (playTime * ((double) newDuration / lastDuartion)));
         this.rpm = rpm;
     }
 

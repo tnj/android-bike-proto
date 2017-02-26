@@ -19,6 +19,7 @@ import android.view.animation.Interpolator;
 import android.view.animation.LinearInterpolator;
 import android.widget.TextView;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -56,6 +57,23 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private Interpolator normalInterpolator = new LinearInterpolator();
     private Interpolator fastInterpolator = new DecelerateInterpolator();
 
+
+    static final int ASCENT_WINDOW_SIZE = 100;
+    private double distance;
+
+    static class AscentSet {
+        float altitude;
+        float distance;
+    }
+
+    CircularArray<AscentSet> ascentSets = new CircularArray<>(ASCENT_WINDOW_SIZE);
+    int ascentIndex = 0;
+
+    void initAscentSets() {
+        for (int i = 0; i < ASCENT_WINDOW_SIZE; i++)
+            ascentSets.add(new AscentSet());
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -82,6 +100,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         binding.content.cadenceRpmGraph.setColorResource(R.color.colorPrimaryDark);
         binding.content.speedRpmGraph.setColorResource(R.color.colorAccent);
+        binding.content.ascentGraph.setColorResource(R.color.colorPrimary);
+
+        initAscentSets();
     }
 
     @Override
@@ -123,8 +144,38 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         } else if (event.sensor == temperature) {
             lastTemperature = event.values[0];
         }
+
+        float currentDistance = (float) (distance * 1000);
+        float altitude = calculateHeight(lastPressure, basePressure, lastTemperature);
+        AscentSet lastAscent = ascentSets.get(ascentIndex - 1);
+        if (currentDistance == lastAscent.distance) {
+            lastAscent.altitude = (lastAscent.altitude + altitude) / 2;
+        } else {
+            AscentSet ascent = ascentSets.get(ascentIndex);
+            ascent.altitude = altitude;
+            ascent.distance = currentDistance;
+            ascentIndex++;
+            if (ascentIndex >= ASCENT_WINDOW_SIZE)
+                ascentIndex = 0;
+        }
+
         updateView();
     }
+
+    static class CircularArray<T> extends ArrayList<T> {
+        public CircularArray(int initialCapacity) {
+            super(initialCapacity);
+        }
+
+        @Override
+        public T get(int index) {
+            int listSize = size();
+            int indexToGet = index % listSize;
+            indexToGet = (indexToGet < 0) ? indexToGet + listSize : indexToGet;
+            return super.get(indexToGet);
+        }
+    }
+
 
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
@@ -142,7 +193,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             }
 
             // distance
-            double distance = (wheelRevolutions - startWheelRevolutions) * getDiameter() / 1_000_000.0;
+            distance = (wheelRevolutions - startWheelRevolutions) * getDiameter() / 1_000_000.0;
             setFloatText(
                 formatValue((float) distance),
                 binding.content.distance,
@@ -206,7 +257,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             }
         }
     }
-
 
     private ValueAnimator initAnimator(TextView integerView, HorizontalBarGraphView graphView) {
         ValueAnimator animator = ValueAnimator.ofFloat(0.0f, 0.0f);
@@ -282,6 +332,25 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         String height = formatValue(calculateHeight(lastPressure, basePressure, lastTemperature));
         setFloatText(height, binding.content.height, binding.content.heightSub);
+
+        float ascent = calculateAscent();
+        binding.content.ascentGraph.setAscent(ascent);
+        String averageAscent = formatValue(ascent * 100);
+        setFloatText(averageAscent, binding.content.ascent, binding.content.ascentSub);
+    }
+
+    private float calculateAscent() {
+        AscentSet current = ascentSets.get(ascentIndex - 1);
+        AscentSet head = null;
+        for (int i = 0; i < ASCENT_WINDOW_SIZE; i++) {
+            head = ascentSets.get(ascentIndex - 1 - i);
+            if (current.distance - head.distance >= 50.0f)
+                break;
+        }
+        float distance = current.distance - head.distance;
+        if (distance == 0.0f)
+            return 0.0f;
+        return (current.altitude - head.altitude) / distance;
     }
 
     private void setFloatText(String floatString, TextView integer, TextView fraction) {
