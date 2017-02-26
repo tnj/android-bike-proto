@@ -10,8 +10,6 @@ import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.View;
 
-import sh.nothing.droidbike.R;
-
 /**
  * Created by tnj on 2/26/17.
  */
@@ -20,8 +18,14 @@ public class HorizontalBarGraphView extends View {
     float max = 100.0f;
     float min = 0.0f;
     float current = 50.0f;
-    int color = 0xff0000ff;
+    int color = 0xff00ffff;
+
+    boolean averageSet = false;
+    float average = 0.0f;
+
     Paint paint = new Paint();
+    Paint averagePaint = new Paint();
+    private int averageAlpha = 96;
 
     public HorizontalBarGraphView(Context context) {
         this(context, null);
@@ -55,21 +59,34 @@ public class HorizontalBarGraphView extends View {
         invalidate();
     }
 
+    public void setAverage(float average) {
+        this.average = average;
+        averageSet = true;
+        invalidate();
+    }
+
     public void setColorResource(@ColorRes int color) {
-        this.color = getResources().getColor(color);
-        paint.setColor(this.color);
+        setColor(getResources().getColor(color));
     }
 
     public void setColor(@ColorInt int color) {
         this.color = color;
         paint.setColor(this.color);
+        averagePaint.setColor(this.color);
+        averagePaint.setAlpha(averageAlpha);
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        int x = (int) ( canvas.getWidth() * ( (Math.min(current, max) - min) / (max - min)));
-        canvas.drawLine(x, 0, x, getHeight(), paint);
+        int x = (int) (canvas.getWidth() * ((Math.min(current, max) - min) / (max - min)));
+        int height = getHeight();
+        canvas.drawLine(x, 0, x, height, paint);
+
+        if (averageSet) {
+            int averageX = (int) (canvas.getWidth() * ((Math.min(average, max) - min) / (max - min)));
+            canvas.drawRect(0, height - height / 4, averageX, height, averagePaint);
+        }
     }
 
     void setupPaint() {
@@ -78,8 +95,14 @@ public class HorizontalBarGraphView extends View {
         paint.setAntiAlias(true);
         paint.setStrokeWidth(dp2px(2));
         paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeJoin(Paint.Join.ROUND);
-        paint.setStrokeCap(Paint.Cap.ROUND);
+
+        averagePaint = new Paint();
+        paint.setColor(color);
+        paint.setAntiAlias(true);
+        paint.setStyle(Paint.Style.FILL);
+        averagePaint.setAlpha(averageAlpha);
+//        paint.setStrokeJoin(Paint.Join.ROUND);
+//        paint.setStrokeCap(Paint.Cap.ROUND);
     }
 
     public float dp2px(float dp) {

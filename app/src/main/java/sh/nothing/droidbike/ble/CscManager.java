@@ -242,7 +242,7 @@ public class CscManager {
                 if (lastCrankRevolutions == crankRevolutions) {
                     float elapsed = (float) ((realTime - lastCrankEventRealTime) / 1_000_000_000.0);
                     float secondsNeeded = (60.0f / lastCrankRpm);
-                    if (secondsNeeded * 1.2 > elapsed)
+                    if (secondsNeeded * 2.0 > elapsed)
                         crankRpm = lastCrankRpm;
                 } else if (lastCrankRevolutions != 0) {
                     crankRpm = rpm(crankRevolutions, lastCrankRevolutions, crankEventTime, lastCrankEventTime);

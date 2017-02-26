@@ -26,6 +26,7 @@ import permissions.dispatcher.NeedsPermission;
 import permissions.dispatcher.RuntimePermissions;
 import sh.nothing.droidbike.ble.CscManager;
 import sh.nothing.droidbike.databinding.ActivityMainBinding;
+import sh.nothing.droidbike.view.HorizontalBarGraphView;
 
 @RuntimePermissions
 public class MainActivity extends AppCompatActivity implements SensorEventListener, CscManager.CscManagerCallback {
@@ -40,6 +41,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     float lastPressure = 0.0f;
     float lastRawPressure = 0.0f;
     float lastTemperature = 25.0f;
+
+    int startWheelRevolutions = -1;
+    int startCrankRevolutions = -1;
+
+    DurationCounter wheelDurationCounter = new DurationCounter();
+    DurationCounter crankDurationCounter = new DurationCounter();
 
     // CSC data
     private CscManager cscManager;
@@ -77,19 +84,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         binding.content.speedGraph.setMin(0.0f);
         binding.content.speedGraph.setColorResource(R.color.colorAccent);
 
-        binding.content.cadenceGraph.setMax(120.0f);
+        binding.content.cadenceGraph.setMax(150.0f);
         binding.content.cadenceGraph.setMin(0.0f);
         binding.content.cadenceGraph.setColorResource(R.color.colorPrimaryDark);
 
-        binding.content.gearRatio.setMax(4.6f);
-        binding.content.gearRatio.setMin(1.2f);
-        binding.content.gearRatio.setColorResource(R.color.colorPrimary);
-
         binding.content.cadenceRpmGraph.setColorResource(R.color.colorPrimaryDark);
+        binding.content.speedRpmGraph.setColorResource(R.color.colorAccent);
     }
-
-    int fpscount = 0;
-    long fpsstart = 0;
 
     @Override
     protected void onStart() {
@@ -100,8 +101,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         MainActivityPermissionsDispatcher.startBleScanWithCheck(this);
 
-        speedAnimator = initAnimator(binding.content.speed);
-        cadenceAnimator = initAnimator(binding.content.cadence);
+        speedAnimator = initAnimator(binding.content.speed, binding.content.speedGraph);
+        cadenceAnimator = initAnimator(binding.content.cadence, binding.content.cadenceGraph);
     }
 
     @Override
@@ -139,34 +140,89 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
 
     @Override
-    public void onUpdate(int wheelRevolutions, float wheelRpm, int cranksRevolutions, float crankRpm) {
+    public void onUpdate(int wheelRevolutions, float wheelRpm, int crankRevolutions, float crankRpm) {
         runOnUiThread(() -> {
+            if (startWheelRevolutions == -1) {
+                startWheelRevolutions = wheelRevolutions;
+            }
+            if (startCrankRevolutions == -1) {
+                startCrankRevolutions = crankRevolutions;
+            }
+
+            // distance
+            double distance = (wheelRevolutions - startWheelRevolutions) * getDiameter() / 1_000_000.0;
+            setFloatText(
+                formatValue((float) distance),
+                binding.content.distance,
+                binding.content.distanceSub
+            );
+
+            // duration
+            long duration = wheelDurationCounter.updateDuration(wheelRpm != 0.0);
+            long durationInMilliseconds = duration / 1000000;
+            binding.content.duration.setText(formatDuration(durationInMilliseconds));
+
+            if (durationInMilliseconds > 5000) {
+                // average speed
+                binding.content.speedGraph.setAverage((float) (distance / durationInMilliseconds * 3600000));
+            }
+
+            long crankDuration = crankDurationCounter.updateDuration(crankRpm != 0.0);
+            long crankDurationInMilliseconds = crankDuration / 1000000;
+            if (crankDurationInMilliseconds > 5000) {
+                // average cadence
+                binding.content.cadenceGraph.setAverage((float) ((double) (crankRevolutions - startCrankRevolutions) / crankDurationInMilliseconds * 60000));
+            }
+
+            // speed
             setAnimatorValue(speedAnimator, calculateSpeed(wheelRpm));
+
+            // cadence
             setAnimatorValue(cadenceAnimator, crankRpm);
+
+            // wheel rpm
+            binding.content.speedRpmGraph.setRpm(wheelRpm);
+
+            // cadence rpm
             binding.content.cadenceRpmGraph.setRpm(crankRpm);
-            binding.content.gearRatio.setCurrent(wheelRpm / crankRpm);
         });
     }
 
-    private ValueAnimator initAnimator(TextView view) {
+    private String formatDuration(long durationInMilliseconds) {
+        int h = (int) (durationInMilliseconds / 3600000);
+        int m = (int) (durationInMilliseconds / 60000) % 60;
+        int s = (int) (durationInMilliseconds / 1000) % 60;
+        return String.format(Locale.US, "%02d:%02d:%02d", h, m, s);
+    }
+
+    static class DurationCounter {
+        private long currentDurationStartTime = 0;
+        private long lastDuration = 1000;
+
+        private long updateDuration(boolean isRunning) {
+            if (isRunning) {
+                if (currentDurationStartTime == 0) {
+                    currentDurationStartTime = System.nanoTime();
+                }
+                return System.nanoTime() - currentDurationStartTime + lastDuration;
+            } else {
+                if (currentDurationStartTime != 0) {
+                    lastDuration += System.nanoTime() - currentDurationStartTime;
+                    currentDurationStartTime = 0;
+                }
+                return lastDuration;
+            }
+        }
+    }
+
+
+    private ValueAnimator initAnimator(TextView integerView, HorizontalBarGraphView graphView) {
         ValueAnimator animator = ValueAnimator.ofFloat(0.0f, 0.0f);
         animator.setDuration(1000);
         animator.setInterpolator(new LinearInterpolator());
         animator.addUpdateListener((animation) -> {
-            view.setText(String.format(Locale.US, "%.0f", (Float) animation.getAnimatedValue()));
-            if (view == binding.content.speed)
-                binding.content.speedGraph.setCurrent((Float) animation.getAnimatedValue());
-            else if (view == binding.content.cadence)
-                binding.content.cadenceGraph.setCurrent((Float) animation.getAnimatedValue());
-
-            fpscount++;
-            long current = System.nanoTime();
-            long diff = current - fpsstart;
-            if (diff > 1_000_000_000) {
-                Log.v(TAG, "fps=" + String.format(Locale.US, "%.1f", (float) fpscount / (diff / 1_000_000_000.0)));
-                fpscount = 0;
-                fpsstart = current;
-            }
+            integerView.setText(Integer.toString((int) (0 + (Float) animation.getAnimatedValue())));
+            graphView.setCurrent((Float) animation.getAnimatedValue());
         });
         animator.start();
         return animator;
@@ -225,9 +281,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         binding.content.temperature.setText(formatValue(lastTemperature));
 
         String height = formatValue(calculateHeight(lastPressure, basePressure, lastTemperature));
-        int pointIndex = height.indexOf('.');
-        binding.content.height.setText(height.substring(0, pointIndex));
-        binding.content.heightSub.setText(height.substring(pointIndex));
+        setFloatText(height, binding.content.height, binding.content.heightSub);
+    }
+
+    private void setFloatText(String floatString, TextView integer, TextView fraction) {
+        int pointIndex = floatString.indexOf('.');
+        integer.setText(floatString.substring(0, pointIndex));
+        fraction.setText(floatString.substring(pointIndex));
     }
 
     private void hideSystemControls() {
