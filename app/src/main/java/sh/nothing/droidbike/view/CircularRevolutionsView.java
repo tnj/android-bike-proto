@@ -76,7 +76,7 @@ public class CircularRevolutionsView extends View {
         int height = getHeight();
         int x = 0;
         int y = 0;
-        int split = 16;
+        int split = 8;
         if (width > height) {
             x = (width - height) / 2;
             width = height;
@@ -91,16 +91,14 @@ public class CircularRevolutionsView extends View {
 
         if (rpm != 0.0f) {
             int step = (int) ((Float) animator.getAnimatedValue() * split);
-            if (step % 2 == 0) {
-                float degree = step / (float) split;
-                // canvas.drawArc(x, y, x + width, y + height, degree * 360 - 90, 360 / split, true, paint);
+            float degree = step / (float) split;
+            // canvas.drawArc(x, y, x + width, y + height, degree * 360 - 90, 360 / split, true, paint);
 
-                canvas.drawCircle(
-                    centerX - (float) Math.cos(2 * Math.PI * degree) * (width / 2) * 0.75f,
-                    centerY - (float) Math.sin(2 * Math.PI * degree) * (height / 2) * 0.75f,
-                    width / 8,
-                    paint);
-            }
+            canvas.drawCircle(
+                centerX - (float) Math.cos(2 * Math.PI * degree) * (width / 2) * 0.75f,
+                centerY - (float) Math.sin(2 * Math.PI * degree) * (height / 2) * 0.75f,
+                width / 8,
+                paint);
         }
 
 //        int centerX = width / 2;
