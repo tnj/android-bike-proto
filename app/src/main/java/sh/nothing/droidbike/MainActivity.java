@@ -62,14 +62,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         setContentView(R.layout.activity_main);
         binding = DataBindingUtil.setContentView(this, R.layout.activity_main);
 
-        binding.fab.setOnClickListener(view -> {
-            basePressure = lastRawPressure;
-            Snackbar
-                .make(view, "Calibrated: " + lastRawPressure, Snackbar.LENGTH_LONG)
-                .setAction("Action", null)
-                .show();
-        });
-
         // Get an instance of the sensor service, and use that to get an instance of
         // a particular sensor.
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
@@ -246,6 +238,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             animator.setFloatValues(currentValue, newValue);
             animator.start();
         }
+    }
+
+    private void resetPressure() {
+        basePressure = lastRawPressure;
+        Snackbar
+            .make(binding.root, "Calibrated: " + lastRawPressure, Snackbar.LENGTH_LONG)
+            .setAction("Action", null)
+            .show();
     }
 
     private float calculateSpeed(float wheelRpm) {
