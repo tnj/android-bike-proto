@@ -73,6 +73,19 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         cscManager = new CscManager(this);
         cscManager.registerCallback(this);
 
+        binding.content.speedGraph.setMax(60.0f);
+        binding.content.speedGraph.setMin(0.0f);
+        binding.content.speedGraph.setColorResource(R.color.colorAccent);
+
+        binding.content.cadenceGraph.setMax(120.0f);
+        binding.content.cadenceGraph.setMin(0.0f);
+        binding.content.cadenceGraph.setColorResource(R.color.colorPrimaryDark);
+
+        binding.content.gearRatio.setMax(4.6f);
+        binding.content.gearRatio.setMin(1.2f);
+        binding.content.gearRatio.setColorResource(R.color.colorPrimary);
+
+        binding.content.cadenceRpmGraph.setColorResource(R.color.colorPrimaryDark);
     }
 
     int fpscount = 0;
@@ -130,6 +143,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         runOnUiThread(() -> {
             setAnimatorValue(speedAnimator, calculateSpeed(wheelRpm));
             setAnimatorValue(cadenceAnimator, crankRpm);
+            binding.content.cadenceRpmGraph.setRpm(crankRpm);
+            binding.content.gearRatio.setCurrent(wheelRpm / crankRpm);
         });
     }
 
@@ -138,7 +153,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         animator.setDuration(1000);
         animator.setInterpolator(new LinearInterpolator());
         animator.addUpdateListener((animation) -> {
-            view.setText(String.format(Locale.US, "%.1f", (Float) animation.getAnimatedValue()));
+            view.setText(String.format(Locale.US, "%.0f", (Float) animation.getAnimatedValue()));
+            if (view == binding.content.speed)
+                binding.content.speedGraph.setCurrent((Float) animation.getAnimatedValue());
+            else if (view == binding.content.cadence)
+                binding.content.cadenceGraph.setCurrent((Float) animation.getAnimatedValue());
 
             fpscount++;
             long current = System.nanoTime();
@@ -159,12 +178,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             animator.setInterpolator(normalInterpolator);
             if (currentValue > newValue) {
                 if (currentValue / newValue > 1.2f) {
-                    currentValue = newValue * 1.2f;
+                    //currentValue = newValue * 1.2f;
                     animator.setInterpolator(fastInterpolator);
                 }
             } else {
                 if (newValue / currentValue > 1.2f) {
-                    currentValue = newValue / 1.2f;
+                    //currentValue = newValue / 1.2f;
                     animator.setInterpolator(fastInterpolator);
                 }
             }
