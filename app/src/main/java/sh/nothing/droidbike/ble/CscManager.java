@@ -52,6 +52,7 @@ public class CscManager {
                 Log.v("BLEScan", result.toString());
                 initWithDevice(result.getDevice());
                 bluetoothLeScanner.stopScan(this);
+                setScanning(false);
             }
         }
     };
@@ -83,7 +84,7 @@ public class CscManager {
 
     public void startScan() {
         ScanSettings settings = new ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
             .build();
 
         List<ScanFilter> filters = new ArrayList<>();
@@ -147,7 +148,7 @@ public class CscManager {
 
     private void doConnectionStatusCallback() {
         if (cscCallback != null)
-            cscCallback.onConnectionStatusChanged(scanning, found, connected);
+            cscCallback.onConnectionStatusChanged(scanning, found, connected, device);
     }
 
     class GattCallback extends BluetoothGattCallback {
@@ -159,10 +160,12 @@ public class CscManager {
                     if (characteristic == null)
                         gatt.discoverServices();
                     setConnected(true);
+                    setFound(false);
                     break;
                 case BluetoothProfile.STATE_DISCONNECTED:
                     Log.e("GattCallback", "STATE_DISCONNECTED");
                     setConnected(false);
+                    startScan();
                     break;
                 default:
                     Log.e("GattCallback", "newState=" + newState);
@@ -279,6 +282,6 @@ public class CscManager {
     public interface CscManagerCallback {
         void onUpdate(int wheelRevolutions, float wheelRpm, int cranksRevolutions, float crankRpm);
 
-        void onConnectionStatusChanged(boolean searching, boolean found, boolean connected);
+        void onConnectionStatusChanged(boolean searching, boolean found, boolean connected, BluetoothDevice device);
     }
 }

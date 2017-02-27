@@ -50,5 +50,7 @@ dependencies {
     compile 'com.github.hotchemi:permissionsdispatcher:2.3.1'
     annotationProcessor 'com.github.hotchemi:permissionsdispatcher-processor:2.3.1'
 
+    compile 'com.google.android.gms:play-services-location:10.2.0'
+
     testCompile 'junit:junit:4.12'
 }

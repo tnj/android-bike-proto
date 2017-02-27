@@ -2,9 +2,11 @@ package sh.nothing.droidbike;
 
 import android.Manifest;
 import android.animation.ValueAnimator;
+import android.bluetooth.BluetoothDevice;
 import android.content.res.Configuration;
 import android.databinding.DataBindingUtil;
 import android.hardware.SensorManager;
+import android.location.Location;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
@@ -21,11 +23,14 @@ import permissions.dispatcher.NeedsPermission;
 import permissions.dispatcher.RuntimePermissions;
 import sh.nothing.droidbike.ble.CscManager;
 import sh.nothing.droidbike.databinding.ActivityMainBinding;
+import sh.nothing.droidbike.location.LocationManager;
 import sh.nothing.droidbike.sensor.SensorsManager;
 import sh.nothing.droidbike.view.HorizontalBarGraphView;
 
 @RuntimePermissions
-public class MainActivity extends AppCompatActivity implements CscManager.CscManagerCallback, SensorsManager.SensorsManagerCallback {
+public class MainActivity
+    extends AppCompatActivity
+    implements CscManager.CscManagerCallback, SensorsManager.SensorsManagerCallback, LocationManager.LocationCallback {
 
     private static final String TAG = "MainActivity";
     private ActivityMainBinding binding;
@@ -45,12 +50,18 @@ public class MainActivity extends AppCompatActivity implements CscManager.CscMan
     private Interpolator fastInterpolator = new DecelerateInterpolator();
 
     private double distance;
+
     private SensorsManager sensorsManager;
     private float lastPressure;
     private float lastPitch;
     private float lastAzimuth;
     private float basePitch;
     private float basePressure;
+
+    private LocationManager locationManager;
+    String lastAddress;
+    Location lastLocation;
+    long lastLocationUpdateAt;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,6 +73,9 @@ public class MainActivity extends AppCompatActivity implements CscManager.CscMan
         sensorsManager.registerCallback(this);
         cscManager = new CscManager(this);
         cscManager.registerCallback(this);
+
+        locationManager = new LocationManager(this);
+        locationManager.registerCallback(this);
 
         binding.content.speedGraph.setMax(60.0f);
         binding.content.speedGraph.setMin(0.0f);
@@ -81,6 +95,8 @@ public class MainActivity extends AppCompatActivity implements CscManager.CscMan
         super.onStart();
         sensorsManager.start();
         sensorsManager.setScreenRotation(getWindowManager().getDefaultDisplay().getRotation());
+
+        locationManager.start();
 
         MainActivityPermissionsDispatcher.startBleScanWithCheck(this);
 
@@ -110,6 +126,8 @@ public class MainActivity extends AppCompatActivity implements CscManager.CscMan
     protected void onStop() {
         super.onStop();
         sensorsManager.stop();
+
+        locationManager.stop();
 
         stopBleScan();
     }
@@ -184,6 +202,43 @@ public class MainActivity extends AppCompatActivity implements CscManager.CscMan
             // cadence rpm
             binding.content.cadenceRpmGraph.setRpm(crankRpm);
         });
+    }
+
+    @Override
+    public void onLocationChanged(Location location) {
+        lastLocation = location;
+        updateGpsView();
+
+        if (System.nanoTime() - lastLocationUpdateAt > 10_000_000_000L) {
+            lastLocationUpdateAt = System.nanoTime();
+            locationManager.requestGeolocation(location).subscribe(address -> {
+                StringBuilder text = new StringBuilder();
+                for (int i = 1; i < address.getMaxAddressLineIndex(); i++) {
+                    text.append(address.getAddressLine(i));
+                }
+                lastAddress = text.toString();
+                updateGpsView();
+            });
+        }
+    }
+
+    void updateView() {
+        String altitude = formatValue(calculateAltitude(lastPressure, basePressure));
+        setFloatText(altitude, binding.content.altitude, binding.content.altitudeSub);
+
+        binding.content.ascentGraph.setAscent(lastPitch - basePitch);
+        String pitch = formatValue((lastPitch - basePitch) * 100);
+        setFloatText(pitch, binding.content.ascent, binding.content.ascentSub);
+    }
+
+    void updateGpsView() {
+        binding.content.geolocation.setText(lastAddress);
+        binding.content.gps.setText(
+            String.format(Locale.US, "LAT %.2f LON %.2f ALT %.1fm SPD %.1fkm/h",
+                lastLocation.getLatitude(), lastLocation.getLongitude(),
+                lastLocation.getAltitude(), lastLocation.getSpeed() * 3600 / 1000
+            )
+        );
     }
 
     private String formatDuration(long durationInMilliseconds) {
@@ -267,12 +322,22 @@ public class MainActivity extends AppCompatActivity implements CscManager.CscMan
         return 2096;
     }
 
+
+    boolean lastConnectedState;
+
     @Override
-    public void onConnectionStatusChanged(boolean searching, boolean found, boolean connected) {
+    public void onConnectionStatusChanged(boolean searching, boolean found, boolean connected, BluetoothDevice device) {
         runOnUiThread(() -> {
             binding.content.connectionIndicator1.setImageResource(searching ? R.drawable.indicator : R.drawable.indicator_inactive);
             binding.content.connectionIndicator2.setImageResource(found ? R.drawable.indicator : R.drawable.indicator_inactive);
             binding.content.connectionIndicator3.setImageResource(connected ? R.drawable.indicator : R.drawable.indicator_inactive);
+
+            if (!lastConnectedState && connected) {
+                Snackbar
+                    .make(binding.root, "Sensor Connected: " + device.getName(), Snackbar.LENGTH_SHORT)
+                    .show();
+                lastConnectedState = true;
+            }
         });
     }
 
@@ -285,17 +350,6 @@ public class MainActivity extends AppCompatActivity implements CscManager.CscMan
     void stopBleScan() {
         if (!cscManager.disconnect())
             cscManager.stopScan();
-    }
-
-    private void updateView() {
-        binding.content.pressure.setText(formatValue(lastPressure));
-
-        String height = formatValue(calculateAltitude(lastPressure, basePressure));
-        setFloatText(height, binding.content.altitude, binding.content.altitudeSub);
-
-        binding.content.ascentGraph.setAscent(lastPitch - basePitch);
-        String averageAscent = formatValue((lastPitch - basePitch) * 100);
-        setFloatText(averageAscent, binding.content.ascent, binding.content.ascentSub);
     }
 
     private void setFloatText(String floatString, TextView integer, TextView fraction) {
