@@ -2,51 +2,33 @@ package sh.nothing.droidbike;
 
 import android.Manifest;
 import android.animation.ValueAnimator;
-import android.content.Context;
 import android.content.res.Configuration;
 import android.databinding.DataBindingUtil;
-import android.hardware.Sensor;
-import android.hardware.SensorEvent;
-import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
-import android.util.Log;
-import android.view.Surface;
 import android.view.View;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.Interpolator;
 import android.view.animation.LinearInterpolator;
 import android.widget.TextView;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Locale;
 
 import permissions.dispatcher.NeedsPermission;
 import permissions.dispatcher.RuntimePermissions;
 import sh.nothing.droidbike.ble.CscManager;
 import sh.nothing.droidbike.databinding.ActivityMainBinding;
+import sh.nothing.droidbike.sensor.SensorsManager;
 import sh.nothing.droidbike.view.HorizontalBarGraphView;
 
 @RuntimePermissions
-public class MainActivity extends AppCompatActivity implements SensorEventListener, CscManager.CscManagerCallback {
+public class MainActivity extends AppCompatActivity implements CscManager.CscManagerCallback, SensorsManager.SensorsManagerCallback {
 
     private static final String TAG = "MainActivity";
-    private SensorManager sensorManager;
-    private Sensor pressure;
-    private Sensor temperature;
-    private Sensor accelerometer;
-    private Sensor magneticField;
-
     private ActivityMainBinding binding;
-
-    float basePressure = 0.0f;
-    float lastPressure = 0.0f;
-    float lastRawPressure = 0.0f;
-    float lastTemperature = 25.0f;
 
     int startWheelRevolutions = -1;
     int startCrankRevolutions = -1;
@@ -63,7 +45,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private Interpolator fastInterpolator = new DecelerateInterpolator();
 
     private double distance;
-    private int screenRotation;
+    private SensorsManager sensorsManager;
+    private float lastPressure;
+    private float lastPitch;
+    private float lastAzimuth;
+    private float basePitch;
+    private float basePressure;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -71,16 +58,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         setContentView(R.layout.activity_main);
         binding = DataBindingUtil.setContentView(this, R.layout.activity_main);
 
-        // Get an instance of the sensor service, and use that to get an instance of
-        // a particular sensor.
-        sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-        pressure = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE);
-        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        magneticField = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
-
-        findTemperatureSensor();
-        hideSystemControls();
-
+        sensorsManager = new SensorsManager(this);
+        sensorsManager.registerCallback(this);
         cscManager = new CscManager(this);
         cscManager.registerCallback(this);
 
@@ -100,18 +79,25 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     protected void onStart() {
         super.onStart();
-        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
-        sensorManager.registerListener(this, magneticField, SensorManager.SENSOR_DELAY_NORMAL);
-        sensorManager.registerListener(this, pressure, SensorManager.SENSOR_DELAY_NORMAL);
-        if (temperature != null)
-            sensorManager.registerListener(this, temperature, SensorManager.SENSOR_DELAY_NORMAL);
+        sensorsManager.start();
+        sensorsManager.setScreenRotation(getWindowManager().getDefaultDisplay().getRotation());
 
         MainActivityPermissionsDispatcher.startBleScanWithCheck(this);
 
         speedAnimator = initAnimator(binding.content.speed, binding.content.speedGraph);
         cadenceAnimator = initAnimator(binding.content.cadence, binding.content.cadenceGraph);
+    }
 
-        screenRotation = getWindowManager().getDefaultDisplay().getRotation();
+    @Override
+    protected void onResume() {
+        super.onResume();
+        hideSystemControls();
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        sensorsManager.setScreenRotation(getWindowManager().getDefaultDisplay().getRotation());
     }
 
     @Override
@@ -123,91 +109,32 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     protected void onStop() {
         super.onStop();
-        sensorManager.unregisterListener(this);
+        sensorsManager.stop();
 
         stopBleScan();
     }
 
-    private final float[] accelerometerReading = new float[3];
-    private final float[] magnetometerReading = new float[3];
-    private final float[] rotationMatrix = new float[9];
-    private final float[] orientationAngles = new float[3];
-    private final float[] remappedRotationMatrix = new float[9];
-
-    long lastSensorUpdate = 0L;
-
-    @Override
-    public void onSensorChanged(SensorEvent event) {
-        if (event.sensor == pressure) {
-            lastRawPressure = event.values[0];
-            if (lastPressure == 0.0f) lastPressure = lastRawPressure;
-            if (basePressure == 0.0f) basePressure = lastRawPressure;
-            lastPressure = lastPressure * 0.9f + lastRawPressure * 0.1f;
-        } else if (event.sensor == temperature) {
-            lastTemperature = event.values[0];
-        } else if (event.sensor == accelerometer) {
-            System.arraycopy(event.values, 0, accelerometerReading, 0, accelerometerReading.length);
-        } else if (event.sensor == magneticField) {
-            System.arraycopy(event.values, 0, magnetometerReading, 0, magnetometerReading.length);
-        }
-
-        if (System.nanoTime() - lastSensorUpdate >= 16_666_666) {
-            lastSensorUpdate = System.nanoTime();
-            processSensorReadings();
-            updateView();
-        }
+    public void onAltitudeClick(View view) {
+        resetPressure();
     }
 
-    @Override
-    public void onConfigurationChanged(Configuration newConfig) {
-        super.onConfigurationChanged(newConfig);
-        screenRotation = getWindowManager().getDefaultDisplay().getRotation();
-    }
-
-    private void processSensorReadings() {
-        SensorManager.getRotationMatrix(rotationMatrix, null, accelerometerReading, magnetometerReading);
-        int axisX = SensorManager.AXIS_X;
-        int axisY = SensorManager.AXIS_Y;
-        switch (screenRotation) {
-            case Surface.ROTATION_90:
-                axisX = SensorManager.AXIS_Y;
-                axisY = SensorManager.AXIS_MINUS_X;
-                break;
-            case Surface.ROTATION_180:
-                axisX = SensorManager.AXIS_MINUS_X;
-                axisY = SensorManager.AXIS_MINUS_Y;
-                break;
-            case Surface.ROTATION_270:
-                axisX = SensorManager.AXIS_MINUS_Y;
-                axisY = SensorManager.AXIS_X;
-                break;
-        }
-        SensorManager.remapCoordinateSystem(rotationMatrix, axisX, axisY, remappedRotationMatrix);
-        SensorManager.getOrientation(remappedRotationMatrix, orientationAngles);
-
-        lastPitch = lastPitch * 0.95f + (float) Math.tan(-orientationAngles[1]) * 0.05f;
-        if (distance == 0.0 && orientationAngles[2] >= -0.1f && orientationAngles[2] <= 0.1f)
-            basePitch = lastPitch;
-    }
-
-    static class CircularArray<T> extends ArrayList<T> {
-        public CircularArray(int initialCapacity) {
-            super(initialCapacity);
-        }
-
-        @Override
-        public T get(int index) {
-            int listSize = size();
-            int indexToGet = index % listSize;
-            indexToGet = (indexToGet < 0) ? indexToGet + listSize : indexToGet;
-            return super.get(indexToGet);
-        }
+    public void onPitchClick(View view) {
+        resetPitch();
     }
 
 
     @Override
-    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+    public void onSensorUpdate(float pressure, float pitch, float azimuth) {
+        lastPressure = pressure;
+        lastPitch = pitch;
+        lastAzimuth = azimuth;
 
+        if (distance <= 0.01) {
+            basePitch = pitch;
+            basePressure = pressure;
+        }
+
+        updateView();
     }
 
     @Override
@@ -318,11 +245,17 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
     }
 
-    private void resetPressure() {
-        basePressure = lastRawPressure;
+    private void resetPitch() {
+        basePitch = lastPitch;
         Snackbar
-            .make(binding.root, "Calibrated: " + lastRawPressure, Snackbar.LENGTH_LONG)
-            .setAction("Action", null)
+            .make(binding.root, "Pitch Calibrated: " + lastPitch, Snackbar.LENGTH_SHORT)
+            .show();
+    }
+
+    private void resetPressure() {
+        basePressure = lastPressure;
+        Snackbar
+            .make(binding.root, "Pressure Calibrated: " + lastPressure, Snackbar.LENGTH_SHORT)
             .show();
     }
 
@@ -354,15 +287,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             cscManager.stopScan();
     }
 
-    float lastPitch = 0.0f;
-    float basePitch = 0.0f;
-
     private void updateView() {
         binding.content.pressure.setText(formatValue(lastPressure));
-        binding.content.temperature.setText(formatValue(lastTemperature));
 
-        String height = formatValue(calculateAltitude(lastPressure, basePressure, lastTemperature));
-        setFloatText(height, binding.content.height, binding.content.heightSub);
+        String height = formatValue(calculateAltitude(lastPressure, basePressure));
+        setFloatText(height, binding.content.altitude, binding.content.altitudeSub);
 
         binding.content.ascentGraph.setAscent(lastPitch - basePitch);
         String averageAscent = formatValue((lastPitch - basePitch) * 100);
@@ -371,6 +300,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     private void setFloatText(String floatString, TextView integer, TextView fraction) {
         int pointIndex = floatString.indexOf('.');
+        if (pointIndex < 0) {
+            integer.setText("-");
+            fraction.setText(".-");
+            return;
+        }
         integer.setText(floatString.substring(0, pointIndex));
         fraction.setText(floatString.substring(pointIndex));
     }
@@ -383,24 +317,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
     }
 
-    private Sensor findTemperatureSensor() {
-        List<Sensor> list = sensorManager.getSensorList(Sensor.TYPE_ALL);
-        list.forEach(sensor -> {
-            if ("BMP280 temperature".equals(sensor.getName())) {
-                temperature = sensor;
-                Log.v(TAG, sensor.getName());           // => BMP280 temperature
-                Log.v(TAG, sensor.getStringType());     // => com.google.sensor.internal_temperature
-                Log.v(TAG, "Type=" + sensor.getType()); // => Type=65536
-            }
-        });
-        return temperature;
-    }
-
     private static String formatValue(float value) {
         return String.format(Locale.US, "%.1f", value);
     }
 
-    private static float calculateAltitude(float lastPressure, float basePressure, float lastTemperature) {
+    private static float calculateAltitude(float lastPressure, float basePressure) {
         return SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, lastPressure) -
             SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, basePressure);
     }

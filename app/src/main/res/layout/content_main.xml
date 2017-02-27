@@ -15,10 +15,10 @@
             android:layout_width="0dp"
             android:layout_height="0dp"
             app:layout_constraintBottom_toBottomOf="@+id/speed"
+            app:layout_constraintHorizontal_bias="0.0"
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toRightOf="parent"
             app:layout_constraintTop_toTopOf="@+id/speed"
-            app:layout_constraintHorizontal_bias="0.0"
             app:layout_constraintVertical_bias="0.0"/>
 
         <sh.nothing.droidbike.view.CircularRevolutionsView
@@ -27,11 +27,11 @@
             android:layout_height="0dp"
             android:layout_marginBottom="0dp"
             android:layout_marginRight="0dp"
-            app:layout_constraintBottom_toTopOf="@+id/textView5"
-            app:layout_constraintLeft_toLeftOf="@+id/textView5"
+            app:layout_constraintBottom_toTopOf="@+id/speedUnit"
+            app:layout_constraintHorizontal_bias="0.5"
+            app:layout_constraintLeft_toLeftOf="@+id/speedUnit"
             app:layout_constraintRight_toRightOf="parent"
             app:layout_constraintTop_toTopOf="@+id/speed"
-            app:layout_constraintHorizontal_bias="0.5"
             app:layout_constraintVertical_bias="0.5"/>
 
 
@@ -39,20 +39,20 @@
             android:id="@+id/speed"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:layout_marginRight="8dp"
+            android:layout_marginTop="0dp"
             android:fontFamily="sans-serif-condensed"
             android:minWidth="72dp"
             android:text="24"
             android:textAlignment="viewEnd"
             android:textColor="@color/colorAccent"
             android:textSize="80sp"
-            app:layout_constraintRight_toLeftOf="@+id/textView5"
-            android:layout_marginRight="8dp"
-            android:layout_marginEnd="8dp"
-            app:layout_constraintTop_toTopOf="parent"
-            android:layout_marginTop="0dp"/>
+            app:layout_constraintRight_toLeftOf="@+id/speedUnit"
+            app:layout_constraintTop_toTopOf="parent"/>
 
         <TextView
-            android:id="@+id/textView5"
+            android:id="@+id/speedUnit"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:fontFamily="sans-serif-condensed"
@@ -78,17 +78,18 @@
             android:layout_height="0dp"
             android:layout_marginBottom="0dp"
             android:layout_marginRight="0dp"
-            app:layout_constraintBottom_toTopOf="@+id/textView6"
-            app:layout_constraintLeft_toLeftOf="@+id/textView6"
+            app:layout_constraintBottom_toTopOf="@+id/cadenceUnit"
+            app:layout_constraintHorizontal_bias="0.0"
+            app:layout_constraintLeft_toLeftOf="@+id/cadenceUnit"
             app:layout_constraintRight_toRightOf="parent"
             app:layout_constraintTop_toTopOf="@+id/cadence"
-            app:layout_constraintHorizontal_bias="0.0"
             app:layout_constraintVertical_bias="0.0"/>
 
         <TextView
             android:id="@+id/cadence"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginRight="8dp"
             android:layout_marginTop="8dp"
             android:fontFamily="sans-serif-condensed"
             android:minWidth="72dp"
@@ -96,12 +97,11 @@
             android:textAlignment="viewEnd"
             android:textColor="@color/colorPrimaryDark"
             android:textSize="80sp"
-            app:layout_constraintTop_toBottomOf="@+id/speed"
-            app:layout_constraintRight_toLeftOf="@+id/textView6"
-            android:layout_marginRight="8dp"/>
+            app:layout_constraintRight_toLeftOf="@+id/cadenceUnit"
+            app:layout_constraintTop_toBottomOf="@+id/speed"/>
 
         <TextView
-            android:id="@+id/textView6"
+            android:id="@+id/cadenceUnit"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:fontFamily="sans-serif-condensed"
@@ -109,27 +109,27 @@
             android:textColor="@color/colorPrimaryDark"
 
             app:layout_constraintBaseline_toBaselineOf="@+id/cadence"
-            app:layout_constraintLeft_toLeftOf="@+id/textView5"/>
+            app:layout_constraintLeft_toLeftOf="@+id/speedUnit"/>
 
         <TextView
             android:id="@+id/distance"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginEnd="0dp"
             android:layout_marginRight="0dp"
+            android:layout_marginTop="8dp"
             android:fontFamily="sans-serif-condensed"
             android:minWidth="72dp"
             android:text="0"
             android:textAlignment="viewEnd"
             android:textColor="@android:color/white"
             android:textSize="40sp"
-            app:layout_constraintRight_toLeftOf="@+id/distance_sub"
-            android:layout_marginEnd="0dp"
-            android:layout_marginTop="8dp"
+            app:layout_constraintRight_toLeftOf="@+id/distanceSub"
             app:layout_constraintTop_toBottomOf="@+id/ascent"/>
 
 
         <TextView
-            android:id="@+id/distance_sub"
+            android:id="@+id/distanceSub"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="8dp"
@@ -140,10 +140,10 @@
             android:textColor="@android:color/white"
             android:textSize="24sp"
             app:layout_constraintBaseline_toBaselineOf="@+id/distance"
-            app:layout_constraintRight_toLeftOf="@+id/textView"/>
+            app:layout_constraintRight_toLeftOf="@+id/altitudeUnit"/>
 
         <TextView
-            android:id="@+id/distance_unit"
+            android:id="@+id/distanceUnit"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginLeft="0dp"
@@ -152,10 +152,10 @@
             android:text="km"
             android:textColor="@android:color/white"
             app:layout_constraintBaseline_toBaselineOf="@+id/distance"
-            app:layout_constraintLeft_toLeftOf="@+id/textView6"/>
+            app:layout_constraintLeft_toLeftOf="@+id/cadenceUnit"/>
 
         <TextView
-            android:id="@+id/height"
+            android:id="@+id/altitude"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="0dp"
@@ -163,62 +163,67 @@
             android:layout_marginTop="8dp"
             android:fontFamily="sans-serif-condensed"
             android:minWidth="72dp"
+            android:onClick="onAltitudeClick"
             android:text="0"
             android:textAlignment="viewEnd"
             android:textColor="@color/colorPrimary"
             android:textSize="40sp"
-            app:layout_constraintRight_toLeftOf="@+id/height_sub"
+            app:layout_constraintRight_toLeftOf="@+id/altitudeSub"
             app:layout_constraintTop_toBottomOf="@+id/duration"/>
 
 
         <TextView
-            android:id="@+id/height_sub"
+            android:id="@+id/altitudeSub"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="8dp"
             android:layout_marginRight="8dp"
             android:fontFamily="sans-serif-condensed"
+            android:onClick="onAltitudeClick"
             android:text=".0"
             android:textAlignment="viewEnd"
             android:textColor="@color/colorPrimary"
             android:textSize="24sp"
-            app:layout_constraintBaseline_toBaselineOf="@+id/height"
-            app:layout_constraintRight_toLeftOf="@+id/textView"/>
+            app:layout_constraintBaseline_toBaselineOf="@+id/altitude"
+            app:layout_constraintRight_toLeftOf="@+id/altitudeUnit"/>
 
         <TextView
-            android:id="@+id/textView"
+            android:id="@+id/altitudeUnit"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:fontFamily="sans-serif-condensed"
+            android:onClick="onAltitudeClick"
             android:text="m"
             android:textColor="@color/colorPrimary"
-            app:layout_constraintBaseline_toBaselineOf="@+id/height"
-            app:layout_constraintLeft_toLeftOf="@+id/distance_unit"/>
+            app:layout_constraintBaseline_toBaselineOf="@+id/altitude"
+            app:layout_constraintLeft_toLeftOf="@+id/distanceUnit"/>
 
         <TextView
-            android:id="@+id/ascent_unit"
+            android:id="@+id/ascentUnit"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginLeft="0dp"
             android:fontFamily="sans-serif-condensed"
+            android:onClick="onPitchClick"
             android:text="%"
             android:textColor="@color/colorPrimary"
             app:layout_constraintBaseline_toBaselineOf="@+id/ascent"
-            app:layout_constraintLeft_toLeftOf="@+id/textView6"
-            android:layout_marginLeft="0dp"/>
+            app:layout_constraintLeft_toLeftOf="@+id/cadenceUnit"/>
 
         <TextView
-            android:id="@+id/ascent_sub"
+            android:id="@+id/ascentSub"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="8dp"
             android:layout_marginRight="8dp"
             android:fontFamily="sans-serif-condensed"
+            android:onClick="onPitchClick"
             android:text=".0"
             android:textAlignment="viewEnd"
             android:textColor="@color/colorPrimary"
             android:textSize="24sp"
             app:layout_constraintBaseline_toBaselineOf="@+id/ascent"
-            app:layout_constraintRight_toLeftOf="@+id/ascent_unit"/>
+            app:layout_constraintRight_toLeftOf="@+id/ascentUnit"/>
 
         <sh.nothing.droidbike.view.AscentGraphView
             android:id="@+id/ascentGraph"
@@ -226,13 +231,13 @@
             android:layout_height="0dp"
             android:layout_marginBottom="0dp"
             android:layout_marginRight="0dp"
+            android:layout_marginTop="0dp"
+            app:layout_constraintBottom_toBottomOf="@+id/ascent"
+            app:layout_constraintHorizontal_bias="0.0"
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toRightOf="parent"
             app:layout_constraintTop_toTopOf="@+id/ascent"
-            app:layout_constraintHorizontal_bias="0.0"
-            app:layout_constraintVertical_bias="0.0"
-            android:layout_marginTop="0dp"
-            app:layout_constraintBottom_toBottomOf="@+id/ascent"/>
+            app:layout_constraintVertical_bias="0.0"/>
 
 
         <TextView
@@ -244,11 +249,12 @@
             android:layout_marginTop="8dp"
             android:fontFamily="sans-serif-condensed"
             android:minWidth="72dp"
+            android:onClick="onPitchClick"
             android:text="0"
             android:textAlignment="viewEnd"
             android:textColor="@color/colorPrimary"
             android:textSize="40sp"
-            app:layout_constraintRight_toLeftOf="@+id/ascent_sub"
+            app:layout_constraintRight_toLeftOf="@+id/ascentSub"
             app:layout_constraintTop_toBottomOf="@+id/cadence"/>
 
         <TextView
@@ -261,86 +267,64 @@
             android:fontFamily="sans-serif-condensed"
             android:text="1010.10"
             android:textAlignment="viewEnd"
-            app:layout_constraintRight_toLeftOf="@+id/textView2"
-            app:layout_constraintTop_toBottomOf="@+id/height"/>
+            app:layout_constraintRight_toLeftOf="@+id/pressureUnit"
+            app:layout_constraintTop_toBottomOf="@+id/altitude"/>
 
         <TextView
             android:id="@+id/duration"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:layout_marginRight="8dp"
+            android:layout_marginTop="8dp"
             android:fontFamily="sans-serif-condensed"
             android:text="00:00:00"
             android:textAlignment="viewEnd"
             android:textColor="@color/colorPrimary"
             android:textSize="40sp"
-            android:layout_marginRight="8dp"
-            app:layout_constraintRight_toLeftOf="@+id/distance_unit"
-            android:layout_marginEnd="8dp"
-            android:layout_marginTop="8dp"
+            app:layout_constraintRight_toLeftOf="@+id/distanceUnit"
             app:layout_constraintTop_toBottomOf="@+id/distance"/>
 
         <TextView
-            android:id="@+id/temperature"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
-            android:layout_marginRight="8dp"
-            android:layout_marginTop="8dp"
-            android:fontFamily="sans-serif-condensed"
-            android:text="25.0"
-            android:textAlignment="viewEnd"
-            app:layout_constraintRight_toLeftOf="@+id/textView3"
-            app:layout_constraintTop_toBottomOf="@+id/pressure"/>
-
-        <TextView
-            android:id="@+id/textView2"
+            android:id="@+id/pressureUnit"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:fontFamily="sans-serif-condensed"
             android:text="hPa"
             app:layout_constraintBottom_toBottomOf="@+id/pressure"
-            app:layout_constraintLeft_toLeftOf="@+id/textView"/>
-
-        <TextView
-            android:id="@+id/textView3"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="sans-serif-condensed"
-            android:text="℃"
-            app:layout_constraintBottom_toBottomOf="@+id/temperature"
-            app:layout_constraintLeft_toLeftOf="@+id/textView"/>
+            app:layout_constraintLeft_toLeftOf="@+id/altitudeUnit"/>
 
         <ImageView
             android:id="@+id/connectionIndicator1"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            app:srcCompat="@drawable/indicator_inactive"
+            android:layout_marginBottom="8dp"
             android:layout_marginLeft="8dp"
-            app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintBottom_toBottomOf="parent"
-            android:layout_marginBottom="8dp"/>
+            app:layout_constraintLeft_toLeftOf="parent"
+            app:srcCompat="@drawable/indicator_inactive"/>
 
         <ImageView
             android:id="@+id/connectionIndicator2"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            app:srcCompat="@drawable/indicator_inactive"
             android:layout_marginBottom="0dp"
-            app:layout_constraintLeft_toRightOf="@+id/connectionIndicator1"
             android:layout_marginLeft="8dp"
+            android:layout_marginStart="8dp"
             app:layout_constraintBottom_toBottomOf="@+id/connectionIndicator1"
-            android:layout_marginStart="8dp"/>
+            app:layout_constraintLeft_toRightOf="@+id/connectionIndicator1"
+            app:srcCompat="@drawable/indicator_inactive"/>
 
         <ImageView
             android:id="@+id/connectionIndicator3"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            app:srcCompat="@drawable/indicator_inactive"
-            app:layout_constraintLeft_toRightOf="@+id/connectionIndicator2"
-            android:layout_marginLeft="8dp"
-            app:layout_constraintBottom_toBottomOf="@+id/connectionIndicator2"
             android:layout_marginBottom="0dp"
-            android:layout_marginStart="8dp"/>
+            android:layout_marginLeft="8dp"
+            android:layout_marginStart="8dp"
+            app:layout_constraintBottom_toBottomOf="@+id/connectionIndicator2"
+            app:layout_constraintLeft_toRightOf="@+id/connectionIndicator2"
+            app:srcCompat="@drawable/indicator_inactive"/>
 
     </android.support.constraint.ConstraintLayout>
 
