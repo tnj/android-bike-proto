@@ -108,7 +108,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     protected void onStart() {
         super.onStart();
-        sensorManager.registerListener(this, pressure, SensorManager.SENSOR_DELAY_UI);
+        sensorManager.registerListener(this, pressure, SensorManager.SENSOR_DELAY_NORMAL);
         if (temperature != null)
             sensorManager.registerListener(this, temperature, SensorManager.SENSOR_DELAY_NORMAL);
 
@@ -140,13 +140,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             lastRawPressure = event.values[0];
             if (lastPressure == 0.0f) lastPressure = lastRawPressure;
             if (basePressure == 0.0f) basePressure = lastRawPressure;
-            lastPressure += (lastRawPressure - lastPressure) * 0.2;
+            lastPressure = lastPressure * 0.9f + lastRawPressure * 0.1f;
         } else if (event.sensor == temperature) {
             lastTemperature = event.values[0];
         }
 
         float currentDistance = (float) (distance * 1000);
-        float altitude = calculateHeight(lastPressure, basePressure, lastTemperature);
+        float altitude = calculateAltitude(lastPressure, basePressure, lastTemperature);
         AscentSet lastAscent = ascentSets.get(ascentIndex - 1);
         if (currentDistance == lastAscent.distance) {
             lastAscent.altitude = (lastAscent.altitude + altitude) / 2;
@@ -330,7 +330,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         binding.content.pressure.setText(formatValue(lastPressure));
         binding.content.temperature.setText(formatValue(lastTemperature));
 
-        String height = formatValue(calculateHeight(lastPressure, basePressure, lastTemperature));
+        String height = formatValue(calculateAltitude(lastPressure, basePressure, lastTemperature));
         setFloatText(height, binding.content.height, binding.content.heightSub);
 
         float ascent = calculateAscent();
@@ -384,7 +384,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         return String.format(Locale.US, "%.1f", value);
     }
 
-    private static float calculateHeight(float lastPressure, float basePressure, float lastTemperature) {
-        return (float) (((Math.pow(basePressure / lastPressure, 1 / 5.257) - 1) * (lastTemperature + 273.15)) / 0.0065);
+    private static float calculateAltitude(float lastPressure, float basePressure, float lastTemperature) {
+        return SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, lastPressure) -
+            SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, basePressure);
     }
 }
