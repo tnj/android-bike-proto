@@ -3,6 +3,7 @@ package sh.nothing.droidbike;
 import android.Manifest;
 import android.animation.ValueAnimator;
 import android.content.Context;
+import android.content.res.Configuration;
 import android.databinding.DataBindingUtil;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -13,6 +14,7 @@ import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.view.Surface;
 import android.view.View;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.Interpolator;
@@ -36,6 +38,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private SensorManager sensorManager;
     private Sensor pressure;
     private Sensor temperature;
+    private Sensor accelerometer;
+    private Sensor magneticField;
+
     private ActivityMainBinding binding;
 
     float basePressure = 0.0f;
@@ -57,22 +62,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private Interpolator normalInterpolator = new LinearInterpolator();
     private Interpolator fastInterpolator = new DecelerateInterpolator();
 
-
-    static final int ASCENT_WINDOW_SIZE = 100;
     private double distance;
-
-    static class AscentSet {
-        float altitude;
-        float distance;
-    }
-
-    CircularArray<AscentSet> ascentSets = new CircularArray<>(ASCENT_WINDOW_SIZE);
-    int ascentIndex = 0;
-
-    void initAscentSets() {
-        for (int i = 0; i < ASCENT_WINDOW_SIZE; i++)
-            ascentSets.add(new AscentSet());
-    }
+    private int screenRotation;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -84,6 +75,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         // a particular sensor.
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         pressure = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE);
+        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        magneticField = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+
         findTemperatureSensor();
         hideSystemControls();
 
@@ -101,13 +95,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         binding.content.cadenceRpmGraph.setColorResource(R.color.colorPrimaryDark);
         binding.content.speedRpmGraph.setColorResource(R.color.colorAccent);
         binding.content.ascentGraph.setColorResource(R.color.colorPrimary);
-
-        initAscentSets();
     }
 
     @Override
     protected void onStart() {
         super.onStart();
+        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        sensorManager.registerListener(this, magneticField, SensorManager.SENSOR_DELAY_NORMAL);
         sensorManager.registerListener(this, pressure, SensorManager.SENSOR_DELAY_NORMAL);
         if (temperature != null)
             sensorManager.registerListener(this, temperature, SensorManager.SENSOR_DELAY_NORMAL);
@@ -116,6 +110,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         speedAnimator = initAnimator(binding.content.speed, binding.content.speedGraph);
         cadenceAnimator = initAnimator(binding.content.cadence, binding.content.cadenceGraph);
+
+        screenRotation = getWindowManager().getDefaultDisplay().getRotation();
     }
 
     @Override
@@ -127,12 +123,18 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     protected void onStop() {
         super.onStop();
-        sensorManager.unregisterListener(this, pressure);
-        if (temperature != null)
-            sensorManager.unregisterListener(this, temperature);
+        sensorManager.unregisterListener(this);
 
         stopBleScan();
     }
+
+    private final float[] accelerometerReading = new float[3];
+    private final float[] magnetometerReading = new float[3];
+    private final float[] rotationMatrix = new float[9];
+    private final float[] orientationAngles = new float[3];
+    private final float[] remappedRotationMatrix = new float[9];
+
+    long lastSensorUpdate = 0L;
 
     @Override
     public void onSensorChanged(SensorEvent event) {
@@ -143,23 +145,49 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             lastPressure = lastPressure * 0.9f + lastRawPressure * 0.1f;
         } else if (event.sensor == temperature) {
             lastTemperature = event.values[0];
+        } else if (event.sensor == accelerometer) {
+            System.arraycopy(event.values, 0, accelerometerReading, 0, accelerometerReading.length);
+        } else if (event.sensor == magneticField) {
+            System.arraycopy(event.values, 0, magnetometerReading, 0, magnetometerReading.length);
         }
 
-        float currentDistance = (float) (distance * 1000);
-        float altitude = calculateAltitude(lastPressure, basePressure, lastTemperature);
-        AscentSet lastAscent = ascentSets.get(ascentIndex - 1);
-        if (currentDistance == lastAscent.distance) {
-            lastAscent.altitude = (lastAscent.altitude + altitude) / 2;
-        } else {
-            AscentSet ascent = ascentSets.get(ascentIndex);
-            ascent.altitude = altitude;
-            ascent.distance = currentDistance;
-            ascentIndex++;
-            if (ascentIndex >= ASCENT_WINDOW_SIZE)
-                ascentIndex = 0;
+        if (System.nanoTime() - lastSensorUpdate >= 16_666_666) {
+            lastSensorUpdate = System.nanoTime();
+            processSensorReadings();
+            updateView();
         }
+    }
 
-        updateView();
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        screenRotation = getWindowManager().getDefaultDisplay().getRotation();
+    }
+
+    private void processSensorReadings() {
+        SensorManager.getRotationMatrix(rotationMatrix, null, accelerometerReading, magnetometerReading);
+        int axisX = SensorManager.AXIS_X;
+        int axisY = SensorManager.AXIS_Y;
+        switch (screenRotation) {
+            case Surface.ROTATION_90:
+                axisX = SensorManager.AXIS_Y;
+                axisY = SensorManager.AXIS_MINUS_X;
+                break;
+            case Surface.ROTATION_180:
+                axisX = SensorManager.AXIS_MINUS_X;
+                axisY = SensorManager.AXIS_MINUS_Y;
+                break;
+            case Surface.ROTATION_270:
+                axisX = SensorManager.AXIS_MINUS_Y;
+                axisY = SensorManager.AXIS_X;
+                break;
+        }
+        SensorManager.remapCoordinateSystem(rotationMatrix, axisX, axisY, remappedRotationMatrix);
+        SensorManager.getOrientation(remappedRotationMatrix, orientationAngles);
+
+        lastPitch = lastPitch * 0.95f + (float) Math.tan(-orientationAngles[1]) * 0.05f;
+        if (distance == 0.0 && orientationAngles[2] >= -0.1f && orientationAngles[2] <= 0.1f)
+            basePitch = lastPitch;
     }
 
     static class CircularArray<T> extends ArrayList<T> {
@@ -326,6 +354,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             cscManager.stopScan();
     }
 
+    float lastPitch = 0.0f;
+    float basePitch = 0.0f;
+
     private void updateView() {
         binding.content.pressure.setText(formatValue(lastPressure));
         binding.content.temperature.setText(formatValue(lastTemperature));
@@ -333,24 +364,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         String height = formatValue(calculateAltitude(lastPressure, basePressure, lastTemperature));
         setFloatText(height, binding.content.height, binding.content.heightSub);
 
-        float ascent = calculateAscent();
-        binding.content.ascentGraph.setAscent(ascent);
-        String averageAscent = formatValue(ascent * 100);
+        binding.content.ascentGraph.setAscent(lastPitch - basePitch);
+        String averageAscent = formatValue((lastPitch - basePitch) * 100);
         setFloatText(averageAscent, binding.content.ascent, binding.content.ascentSub);
-    }
-
-    private float calculateAscent() {
-        AscentSet current = ascentSets.get(ascentIndex - 1);
-        AscentSet head = null;
-        for (int i = 0; i < ASCENT_WINDOW_SIZE; i++) {
-            head = ascentSets.get(ascentIndex - 1 - i);
-            if (current.distance - head.distance >= 50.0f)
-                break;
-        }
-        float distance = current.distance - head.distance;
-        if (distance == 0.0f)
-            return 0.0f;
-        return (current.altitude - head.altitude) / distance;
     }
 
     private void setFloatText(String floatString, TextView integer, TextView fraction) {
