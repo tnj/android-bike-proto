@@ -83,6 +83,11 @@ public class CscManager {
     }
 
     public void startScan() {
+        if (device != null) {
+            initWithDevice(device);
+            return;
+        }
+
         ScanSettings settings = new ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
             .build();
@@ -103,9 +108,8 @@ public class CscManager {
     }
 
     public boolean connect() {
-        if (gatt != null) {
-            // reconnect
-            gatt.connect();
+        if (device != null) {
+            initWithDevice(device);
             return true;
         }
         return false;
@@ -114,6 +118,7 @@ public class CscManager {
     public boolean disconnect() {
         if (gatt != null) {
             gatt.close();
+            gatt = null;
             return true;
         }
         return false;
@@ -157,8 +162,7 @@ public class CscManager {
             switch (newState) {
                 case BluetoothProfile.STATE_CONNECTED:
                     Log.v("GattCallback", "STATE_CONNECTED");
-                    if (characteristic == null)
-                        gatt.discoverServices();
+                    gatt.discoverServices();
                     setConnected(true);
                     setFound(false);
                     break;

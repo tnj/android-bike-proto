@@ -95,7 +95,6 @@ public class MainActivity
         super.onStart();
         sensorsManager.start();
         sensorsManager.setScreenRotation(getWindowManager().getDefaultDisplay().getRotation());
-
         locationManager.start();
 
         MainActivityPermissionsDispatcher.startBleScanWithCheck(this);
@@ -126,9 +125,7 @@ public class MainActivity
     protected void onStop() {
         super.onStop();
         sensorsManager.stop();
-
         locationManager.stop();
-
         stopBleScan();
     }
 
