@@ -163,6 +163,7 @@ public class CscManager {
                 case BluetoothProfile.STATE_DISCONNECTED:
                     Log.e("GattCallback", "STATE_DISCONNECTED");
                     setConnected(false);
+                    device = null;
                     startScan();
                     break;
                 default:
