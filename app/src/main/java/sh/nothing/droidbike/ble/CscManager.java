@@ -236,6 +236,10 @@ public class CscManager {
         long lastEventRealTime;
 
         void setRevolutionEvent(int revolutions, int eventTime, long realTime) {
+            if (revolutions < lastRevolutions) {
+                Log.d(TAG, "Ignoring reverse revolution event: " + lastRevolutions + " -> " + revolutions);
+                return;
+            }
             lastRpm = calcurateRpm(revolutions, eventTime, realTime);
             lastRevolutions = revolutions;
             lastEventTime = eventTime;
