@@ -37,6 +37,9 @@ public class AscentGraphView extends View {
     }
 
     public void setAscent(float ascent) {
+        if (this.ascent == ascent)
+            return;
+
         this.ascent = ascent;
         invalidate();
     }

@@ -20,6 +20,8 @@ import com.google.android.gms.location.LocationSettingsRequest;
 import com.google.android.gms.location.LocationSettingsResult;
 import com.google.android.gms.location.LocationSettingsStatusCodes;
 
+import java.io.IOException;
+
 import io.reactivex.Single;
 import io.reactivex.SingleOnSubscribe;
 import io.reactivex.android.schedulers.AndroidSchedulers;
@@ -123,7 +125,11 @@ public class LocationManager implements GoogleApiClient.ConnectionCallbacks, Loc
 
     public Single<Address> requestGeolocation(Location location) {
         return Single.create((SingleOnSubscribe<Address>) e -> {
-            e.onSuccess(geocoder.getFromLocation(location.getLatitude(), location.getLongitude(), 1).get(0));
+            try {
+                e.onSuccess(geocoder.getFromLocation(location.getLatitude(), location.getLongitude(), 1).get(0));
+            } catch (IOException ignored) {
+                e.onError(ignored);
+            }
         })
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread());

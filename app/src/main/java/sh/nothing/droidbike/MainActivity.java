@@ -11,10 +11,8 @@ import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
-import android.support.v4.text.TextUtilsCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
-import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.animation.DecelerateInterpolator;
@@ -216,7 +214,8 @@ public class MainActivity
         lastLocation = location;
         updateGpsView();
 
-        if (System.nanoTime() - lastLocationUpdateAt > 10_000_000_000L) {
+        long oneMinuteInNanos = 60_000_000_000L;
+        if (System.nanoTime() - lastLocationUpdateAt > oneMinuteInNanos) {
             lastLocationUpdateAt = System.nanoTime();
             locationManager.requestGeolocation(location).subscribe(address -> {
                 StringBuilder text = new StringBuilder();
@@ -273,7 +272,8 @@ public class MainActivity
                     int circumference = 0;
                     try {
                         circumference = Integer.parseInt(input.getText().toString());
-                    } catch (NumberFormatException ignored) {}
+                    } catch (NumberFormatException ignored) {
+                    }
                     setCircumference(circumference);
                 })
             .setNegativeButton(android.R.string.cancel, null)
@@ -305,8 +305,9 @@ public class MainActivity
         animator.setDuration(1000);
         animator.setInterpolator(new LinearInterpolator());
         animator.addUpdateListener((animation) -> {
-            integerView.setText(Integer.toString((int) (0 + (Float) animation.getAnimatedValue())));
-            graphView.setCurrent((Float) animation.getAnimatedValue());
+            float value = (Float) animation.getAnimatedValue();
+            integerView.setText(Integer.toString((int) (0 + value)));
+            graphView.setCurrent(value);
         });
         animator.start();
         return animator;
@@ -384,6 +385,10 @@ public class MainActivity
                     .make(binding.root, "Sensor Connected: " + device.getName(), Snackbar.LENGTH_SHORT)
                     .show();
                 lastConnectedState = true;
+            } else if (lastConnectedState && !connected) {
+                Snackbar
+                    .make(binding.root, "Sensor Disconnected", Snackbar.LENGTH_SHORT)
+                    .show();
             }
         });
     }

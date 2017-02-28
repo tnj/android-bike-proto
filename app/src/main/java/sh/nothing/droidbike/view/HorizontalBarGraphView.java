@@ -55,11 +55,17 @@ public class HorizontalBarGraphView extends View {
     }
 
     public void setCurrent(float current) {
+        if (this.current == current)
+            return;
+
         this.current = current;
         invalidate();
     }
 
     public void setAverage(float average) {
+        if (this.average == average)
+            return;
+
         this.average = average;
         averageSet = true;
         invalidate();
