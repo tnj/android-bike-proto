@@ -21,7 +21,6 @@ import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -59,17 +58,12 @@ public class CscManager {
     private BluetoothGatt gatt;
     private BluetoothGattCharacteristic characteristic;
 
-    private int lastWheelRevolutions;
-    private int lastWheelEventTime;
-    private long lastWheelEventRealTime;
-    private int lastCrankRevolutions;
-    private int lastCrankEventTime;
-    private long lastCrankEventRealTime;
+    private CscRevolutionsCounter wheel = new CscRevolutionsCounter();
+    private CscRevolutionsCounter crank = new CscRevolutionsCounter();
+
     private boolean scanning;
     private boolean connected;
     private boolean found;
-    private float lastWheelRpm;
-    private float lastCrankRpm;
 
     public CscManager(Context context) {
         this.context = context;
@@ -195,7 +189,6 @@ public class CscManager {
 
 
         // Heavily borrowed from https://github.com/NordicSemiconductor/Android-nRF-Toolbox/blob/0b2e3aba170e784ccb1d4ff7eed3212a7f6a084b/app/src/main/java/no/nordicsemi/android/nrftoolbox/csc/CSCManager.java
-
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
             super.onCharacteristicChanged(gatt, characteristic);
@@ -209,8 +202,7 @@ public class CscManager {
             final boolean crankRevPreset = (flags & CRANK_REVOLUTION_DATA_PRESENT) > 0;
 
             long realTime = System.nanoTime();
-            float wheelRpm = 0.0f;
-            float crankRpm = 0.0f;
+
             if (wheelRevPresent) {
                 final int wheelRevolutions = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT32, offset);
                 offset += 4;
@@ -218,25 +210,7 @@ public class CscManager {
                 final int wheelEventTime = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, offset); // 1/1024 s
                 offset += 2;
 
-                if (lastWheelRevolutions == wheelRevolutions) {
-                    float elapsed = (float) ((realTime - lastWheelEventRealTime) / 1_000_000_000.0);
-                    float secondsNeeded = (60.0f / lastWheelRpm);
-                    if (secondsNeeded * 1.2 > elapsed)
-                        wheelRpm = lastWheelRpm;
-                } else if (lastWheelRevolutions != 0) {
-                    wheelRpm = rpm(wheelRevolutions, lastWheelRevolutions, wheelEventTime, lastWheelEventTime);
-                    lastWheelEventRealTime = realTime;
-                }
-
-                int length = 2096; // mm
-                Log.d(TAG, "Wheel: #" + wheelRevolutions
-                    + " @ " + String.format(Locale.US, "%.2f", (float) wheelEventTime / 1024) + "s / "
-                    + String.format(Locale.US, "%.2f", wheelRpm) + "RPM / "
-                    + String.format(Locale.US, "%.2f", ((wheelRpm * length) * 60 / 1000 / 1000)) + "km/h");
-
-                lastWheelRevolutions = wheelRevolutions;
-                lastWheelEventTime = wheelEventTime;
-                lastWheelRpm = wheelRpm;
+                wheel.setRevolutionEvent(wheelRevolutions, wheelEventTime, realTime);
             }
 
             if (crankRevPreset) {
@@ -246,42 +220,52 @@ public class CscManager {
                 final int crankEventTime = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, offset);
                 offset += 2;
 
-                if (lastCrankRevolutions == crankRevolutions) {
-                    float elapsed = (float) ((realTime - lastCrankEventRealTime) / 1_000_000_000.0);
-                    float secondsNeeded = (60.0f / lastCrankRpm);
-                    if (secondsNeeded * 2.0 > elapsed)
-                        crankRpm = lastCrankRpm;
-                } else if (lastCrankRevolutions != 0) {
-                    crankRpm = rpm(crankRevolutions, lastCrankRevolutions, crankEventTime, lastCrankEventTime);
-                    lastCrankEventRealTime = realTime;
-                }
-
-                Log.d(TAG, "Crank: #" + crankRevolutions
-                    + " @ " + String.format(Locale.US, "%.2f", (float) crankEventTime / 1024) + "s / "
-                    + String.format(Locale.US, "%.2f", crankRpm) + "RPM");
-
-                lastCrankRevolutions = crankRevolutions;
-                lastCrankEventTime = crankEventTime;
-                lastCrankRpm = crankRpm;
+                crank.setRevolutionEvent(crankRevolutions, crankEventTime, realTime);
             }
 
-            Log.d(TAG, "Gear Ratio: " + String.format(Locale.US, "%.2f", wheelRpm / crankRpm));
-
             if (cscCallback != null)
-                cscCallback.onUpdate(lastWheelRevolutions, wheelRpm, lastCrankRevolutions, crankRpm);
+                cscCallback.onUpdate(wheel.lastRevolutions, wheel.lastRpm, crank.lastRevolutions, crank.lastRpm);
         }
     }
 
-    static float rpm(int newRevolutions, int lastRevolutions, int newTime, int lastTime) {
-        int diff = timeDiff(newTime, lastTime);
-        if (diff == 0)
-            return 0.0f;
-        return (float) (newRevolutions - lastRevolutions) / diff * 1024.0f * 60.0f;
+    static class CscRevolutionsCounter {
+        int lastRevolutions;
+        int lastEventTime;
+        float lastRpm;
+        long lastEventRealTime;
+
+        void setRevolutionEvent(int revolutions, int eventTime, long realTime) {
+            lastRpm = calcurateRpm(revolutions, eventTime, realTime);
+            lastRevolutions = revolutions;
+            lastEventTime = eventTime;
+        }
+
+        private float calcurateRpm(int revolutions, int eventTime, long realTime) {
+            float rpm = 0.0f;
+            if (lastRevolutions == revolutions) {
+                float elapsed = (float) ((realTime - lastEventRealTime) / 1_000_000_000.0);
+                float secondsNeeded = (60.0f / lastRpm);
+                if (secondsNeeded * 2.0 > elapsed)
+                    rpm = lastRpm;
+            } else if (lastRevolutions != 0) {
+                rpm = rpm(revolutions, lastRevolutions, eventTime, lastEventTime);
+                lastEventRealTime = realTime;
+            }
+            return rpm;
+        }
+
+        static float rpm(int newRevolutions, int lastRevolutions, int newTime, int lastTime) {
+            int diff = timeDiff(newTime, lastTime);
+            if (diff == 0)
+                return 0.0f;
+            return (float) (newRevolutions - lastRevolutions) / diff * 1024.0f * 60.0f;
+        }
+
+        static int timeDiff(int newTime, int lastTime) {
+            return newTime - lastTime + (newTime < lastTime ? 65535 : 0);
+        }
     }
 
-    static int timeDiff(int newTime, int lastTime) {
-        return newTime - lastTime + (newTime < lastTime ? 65535 : 0);
-    }
 
     public interface CscManagerCallback {
         void onUpdate(int wheelRevolutions, float wheelRpm, int cranksRevolutions, float crankRpm);
