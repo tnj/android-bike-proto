@@ -8,13 +8,19 @@ import android.databinding.DataBindingUtil;
 import android.hardware.SensorManager;
 import android.location.Location;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
+import android.support.v4.text.TextUtilsCompat;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
+import android.text.TextUtils;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.Interpolator;
 import android.view.animation.LinearInterpolator;
+import android.widget.EditText;
 import android.widget.TextView;
 
 import java.util.Locale;
@@ -34,6 +40,10 @@ public class MainActivity
 
     private static final String TAG = "MainActivity";
     private ActivityMainBinding binding;
+
+    static final String PREF_CIRCUMFERENCE_KEY = "circumference";
+    private static final int DEFAULT_CIRCUMFERENCE = 2096;
+    private int circumference = -1;
 
     int startWheelRevolutions = -1;
     int startCrankRevolutions = -1;
@@ -163,7 +173,7 @@ public class MainActivity
             }
 
             // distance
-            distance = (wheelRevolutions - startWheelRevolutions) * getDiameter() / 1_000_000.0;
+            distance = (wheelRevolutions - startWheelRevolutions) * getCircumference() / 1_000_000.0;
             setFloatText(
                 formatValue((float) distance),
                 binding.content.distance,
@@ -245,6 +255,31 @@ public class MainActivity
         return String.format(Locale.US, "%02d:%02d:%02d", h, m, s);
     }
 
+    public void onSpeedGraphClick(View view) {
+        showCircumferenceDialog();
+    }
+
+    private void showCircumferenceDialog() {
+        View viewInflated = LayoutInflater.from(this).inflate(R.layout.content_circumference_setting, null, false);
+        EditText input = (EditText) viewInflated.findViewById(R.id.circumference);
+        input.setText(Integer.toString(getCircumference()));
+        input.setSelection(0, input.getText().length());
+
+        new AlertDialog.Builder(this)
+            .setTitle("Setting")
+            .setView(viewInflated)
+            .setPositiveButton(android.R.string.ok,
+                (dialog, which) -> {
+                    int circumference = 0;
+                    try {
+                        circumference = Integer.parseInt(input.getText().toString());
+                    } catch (NumberFormatException ignored) {}
+                    setCircumference(circumference);
+                })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
     static class DurationCounter {
         private long currentDurationStartTime = 0;
         private long lastDuration = 1000;
@@ -312,13 +347,28 @@ public class MainActivity
     }
 
     private float calculateSpeed(float wheelRpm) {
-        return (wheelRpm * getDiameter() * 60 / 1000 / 1000);
+        return (wheelRpm * getCircumference() * 60 / 1000 / 1000);
     }
 
-    public int getDiameter() {
-        return 2096;
+    public int getCircumference() {
+        if (circumference == -1) {
+            circumference = PreferenceManager
+                .getDefaultSharedPreferences(MainActivity.this)
+                .getInt(PREF_CIRCUMFERENCE_KEY, DEFAULT_CIRCUMFERENCE);
+        }
+        return circumference;
     }
 
+    public void setCircumference(int circumference) {
+        if (circumference <= 0)
+            circumference = DEFAULT_CIRCUMFERENCE;
+
+        this.circumference = circumference;
+        PreferenceManager.getDefaultSharedPreferences(MainActivity.this)
+            .edit()
+            .putInt(PREF_CIRCUMFERENCE_KEY, circumference)
+            .apply();
+    }
 
     boolean lastConnectedState;
 

@@ -14,6 +14,7 @@
             android:id="@+id/speedGraph"
             android:layout_width="0dp"
             android:layout_height="0dp"
+            android:onClick="onSpeedGraphClick"
             app:layout_constraintBottom_toBottomOf="@+id/speed"
             app:layout_constraintHorizontal_bias="0.0"
             app:layout_constraintLeft_toLeftOf="parent"
@@ -220,7 +221,6 @@
             android:layout_height="wrap_content"
             android:layout_marginLeft="0dp"
             android:fontFamily="sans-serif-condensed"
-            android:onClick="onPitchClick"
             android:text="%"
             android:textColor="@color/colorPrimary"
             app:layout_constraintBaseline_toBaselineOf="@+id/ascent"
@@ -233,7 +233,6 @@
             android:layout_marginEnd="8dp"
             android:layout_marginRight="8dp"
             android:fontFamily="sans-serif-condensed"
-            android:onClick="onPitchClick"
             android:text=".0"
             android:textAlignment="viewEnd"
             android:textColor="@color/colorPrimary"
@@ -248,13 +247,13 @@
             android:layout_marginBottom="0dp"
             android:layout_marginRight="0dp"
             android:layout_marginTop="0dp"
+            android:onClick="onPitchClick"
             app:layout_constraintBottom_toBottomOf="@+id/ascent"
             app:layout_constraintHorizontal_bias="0.0"
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toRightOf="parent"
             app:layout_constraintTop_toTopOf="@+id/ascent"
             app:layout_constraintVertical_bias="0.0"/>
-
 
         <TextView
             android:id="@+id/ascent"
