@@ -13,6 +13,8 @@ import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
+import android.text.TextUtils;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.animation.DecelerateInterpolator;
@@ -20,6 +22,9 @@ import android.view.animation.Interpolator;
 import android.view.animation.LinearInterpolator;
 import android.widget.EditText;
 import android.widget.TextView;
+
+import com.annimon.stream.Collectors;
+import com.annimon.stream.Stream;
 
 import java.util.Locale;
 
@@ -219,10 +224,21 @@ public class MainActivity
             lastLocationUpdateAt = System.nanoTime();
             locationManager.requestGeolocation(location).subscribe(address -> {
                 StringBuilder text = new StringBuilder();
-                for (int i = 1; i < address.getMaxAddressLineIndex(); i++) {
+                for (int i = 1; i <= address.getMaxAddressLineIndex(); i++) {
                     text.append(address.getAddressLine(i));
                 }
                 lastAddress = text.toString();
+                if (TextUtils.isEmpty(lastAddress)) {
+                    Log.v(TAG, address.toString());
+                    lastAddress = Stream
+                        .of(
+                            address.getAdminArea(),
+                            address.getSubAdminArea(),
+                            address.getLocality()
+                        )
+                        .filterNot(TextUtils::isEmpty)
+                        .collect(Collectors.joining());
+                }
                 updateGpsView();
             });
         }

@@ -114,7 +114,7 @@ public class SensorsManager implements SensorEventListener {
         float pitch = (float) Math.tan(-orientationAngles[1]);
         if (Float.isNaN(lastPitch))
             lastPitch = pitch;
-        lastPitch = lastPitch * 0.95f + pitch * 0.05f;
+        lastPitch = lastPitch * 0.99f + pitch * 0.01f;
 
         if (Float.isNaN(lastAzimuth))
             lastAzimuth = orientationAngles[0];
