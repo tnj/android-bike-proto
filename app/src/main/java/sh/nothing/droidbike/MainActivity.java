@@ -26,6 +26,8 @@ import android.widget.TextView;
 import com.annimon.stream.Collectors;
 import com.annimon.stream.Stream;
 
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.Locale;
 
 import permissions.dispatcher.NeedsPermission;
@@ -66,15 +68,18 @@ public class MainActivity
 
     private SensorsManager sensorsManager;
     private float lastPressure;
-    private float lastPitch;
-    private float lastAzimuth;
-    private float basePitch;
     private float basePressure;
+    private float lastAzimuth;
+    private PitchCalculator pitchCalculator;
 
     private LocationManager locationManager;
     String lastAddress;
     Location lastLocation;
     long lastLocationUpdateAt;
+
+    ValueAnimator clockAnimator;
+    private DateFormat timeFormatter;
+    private double lastPitchDistance;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -89,6 +94,8 @@ public class MainActivity
 
         locationManager = new LocationManager(this);
         locationManager.registerCallback(this);
+
+        pitchCalculator = new PitchCalculator();
 
         binding.content.speedGraph.setMax(60.0f);
         binding.content.speedGraph.setMin(0.0f);
@@ -112,8 +119,9 @@ public class MainActivity
 
         MainActivityPermissionsDispatcher.startBleScanWithCheck(this);
 
-        speedAnimator = initAnimator(binding.content.speed, binding.content.speedGraph);
-        cadenceAnimator = initAnimator(binding.content.cadence, binding.content.cadenceGraph);
+        speedAnimator = initBarGraphAnimator(binding.content.speed, binding.content.speedGraph);
+        cadenceAnimator = initBarGraphAnimator(binding.content.cadence, binding.content.cadenceGraph);
+        clockAnimator = initClockAnimator(binding.content.clock);
     }
 
     @Override
@@ -146,19 +154,11 @@ public class MainActivity
         resetPressure();
     }
 
-    public void onPitchClick(View view) {
-        resetPitch();
-    }
-
-
     @Override
     public void onSensorUpdate(float pressure, float pitch, float azimuth) {
         lastPressure = pressure;
-        lastPitch = pitch;
         lastAzimuth = azimuth;
-
         if (distance <= 0.01) {
-            basePitch = pitch;
             basePressure = pressure;
         }
 
@@ -211,7 +211,21 @@ public class MainActivity
 
             // cadence rpm
             binding.content.cadenceRpmGraph.setRpm(crankRpm);
+
+            updatePitch(distance);
         });
+    }
+
+    private void updatePitch(double distance) {
+        lastPitchDistance = distance;
+        float pitch = pitchCalculator.getPitch();
+        binding.content.ascentGraph.setAscent(pitch);
+        String pitchString = formatValue(pitch * 100);
+        setFloatText(pitchString, binding.content.ascent, binding.content.ascentSub);
+    }
+
+    private float getLastAltitude() {
+        return calculateAltitude(lastPressure, basePressure);
     }
 
     @Override
@@ -240,17 +254,16 @@ public class MainActivity
                         .collect(Collectors.joining());
                 }
                 updateGpsView();
-            });
+            }, throwable -> {});
         }
     }
 
     void updateView() {
-        String altitude = formatValue(calculateAltitude(lastPressure, basePressure));
-        setFloatText(altitude, binding.content.altitude, binding.content.altitudeSub);
+        float altitude = getLastAltitude();
+        String altitudeString = formatValue(altitude);
+        setFloatText(altitudeString, binding.content.altitude, binding.content.altitudeSub);
 
-        binding.content.ascentGraph.setAscent(lastPitch - basePitch);
-        String pitch = formatValue((lastPitch - basePitch) * 100);
-        setFloatText(pitch, binding.content.ascent, binding.content.ascentSub);
+        pitchCalculator.updateAltitude(altitude, distance);
     }
 
     void updateGpsView() {
@@ -316,7 +329,7 @@ public class MainActivity
         }
     }
 
-    private ValueAnimator initAnimator(TextView integerView, HorizontalBarGraphView graphView) {
+    private ValueAnimator initBarGraphAnimator(TextView integerView, HorizontalBarGraphView graphView) {
         ValueAnimator animator = ValueAnimator.ofFloat(0.0f, 0.0f);
         animator.setDuration(1000);
         animator.setInterpolator(new LinearInterpolator());
@@ -324,6 +337,26 @@ public class MainActivity
             float value = (Float) animation.getAnimatedValue();
             integerView.setText(Integer.toString((int) (0 + value)));
             graphView.setCurrent(value);
+        });
+        animator.start();
+        return animator;
+    }
+
+    String lastClockText;
+
+    private ValueAnimator initClockAnimator(TextView clock) {
+        timeFormatter = SimpleDateFormat.getTimeInstance(SimpleDateFormat.SHORT, Locale.US);
+        ValueAnimator animator = ValueAnimator.ofInt(0, 1);
+        animator.setDuration(1000);
+        animator.setInterpolator(new LinearInterpolator());
+        animator.setRepeatCount(ValueAnimator.INFINITE);
+        animator.setRepeatMode(ValueAnimator.RESTART);
+        animator.addUpdateListener((animation) -> {
+            String time = timeFormatter.format(System.currentTimeMillis());
+            if (!TextUtils.equals(time, lastClockText)) {
+                clock.setText(time);
+                lastClockText = time;
+            }
         });
         animator.start();
         return animator;
@@ -347,13 +380,6 @@ public class MainActivity
             animator.setFloatValues(currentValue, newValue);
             animator.start();
         }
-    }
-
-    private void resetPitch() {
-        basePitch = lastPitch;
-        Snackbar
-            .make(binding.root, "Pitch Calibrated: " + lastPitch, Snackbar.LENGTH_SHORT)
-            .show();
     }
 
     private void resetPressure() {
@@ -423,9 +449,8 @@ public class MainActivity
     private void setFloatText(String floatString, TextView integer, TextView fraction) {
         int pointIndex = floatString.indexOf('.');
         if (pointIndex < 0) {
-            integer.setText("-");
-            fraction.setText(".-");
-            return;
+            floatString = "0.0";
+            pointIndex = 1;
         }
         integer.setText(floatString.substring(0, pointIndex));
         fraction.setText(floatString.substring(pointIndex));
@@ -446,5 +471,44 @@ public class MainActivity
     private static float calculateAltitude(float lastPressure, float basePressure) {
         return SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, lastPressure) -
             SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, basePressure);
+    }
+
+
+    static class PitchCalculator {
+        static class AscentSet {
+            float altitude;
+            float distance;
+        }
+
+        static final int RESOLUTION = 25; // m
+
+        AscentSet current = new AscentSet();
+        AscentSet last = new AscentSet();
+
+        public PitchCalculator() {
+        }
+
+        public void updateAltitude(float altitude, double distance) {
+            float currentDistance = (float) (distance * 1000); // km -> m
+            if (((int) currentDistance / RESOLUTION) == ((int) current.distance / RESOLUTION)) {
+                current.altitude = current.altitude * 0.9f + altitude * 0.1f;
+            } else {
+                shift();
+                current.altitude = altitude;
+            }
+            current.distance = currentDistance;
+        }
+
+        private void shift() {
+            last.altitude = current.altitude;
+            last.distance = current.distance;
+        }
+
+        public float getPitch() {
+            float distance = current.distance - last.distance;
+            if (distance == 0.0f)
+                return 0.0f;
+            return (current.altitude - last.altitude) / distance;
+        }
     }
 }
