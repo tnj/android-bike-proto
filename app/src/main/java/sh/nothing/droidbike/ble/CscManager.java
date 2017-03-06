@@ -179,6 +179,7 @@ public class CscManager {
             BluetoothGattService service = gatt.getService(SERVICE_UUID);
             if (service != null) {
                 characteristic = service.getCharacteristic(CHARACTERISTIC_UUID);
+
                 gatt.setCharacteristicNotification(characteristic, true);
                 final BluetoothGattDescriptor descriptor = characteristic.getDescriptor(CLIENT_CHARACTERISTIC_CONFIG_DESCRIPTOR_UUID);
                 if (descriptor != null) {
@@ -196,7 +197,7 @@ public class CscManager {
 
             // Decode the new data
             int offset = 0;
-            final int flags = characteristic.getValue()[offset]; // 1 byte
+            final byte flags = characteristic.getValue()[offset]; // 1 byte
             offset += 1;
 
             final boolean wheelRevPresent = (flags & WHEEL_REVOLUTIONS_DATA_PRESENT) > 0;

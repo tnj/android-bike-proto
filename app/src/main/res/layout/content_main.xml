@@ -141,7 +141,7 @@
             android:textColor="@android:color/white"
             android:textSize="24sp"
             app:layout_constraintBaseline_toBaselineOf="@+id/distance"
-            app:layout_constraintRight_toLeftOf="@+id/altitudeUnit"/>
+            app:layout_constraintRight_toLeftOf="@+id/distanceUnit"/>
 
         <TextView
             android:id="@+id/distanceUnit"
@@ -153,7 +153,7 @@
             android:text="km"
             android:textColor="@android:color/white"
             app:layout_constraintBaseline_toBaselineOf="@+id/distance"
-            app:layout_constraintLeft_toLeftOf="@+id/cadenceUnit"/>
+            app:layout_constraintLeft_toLeftOf="@+id/ascentUnit"/>
 
         <TextView
             android:id="@+id/duration"

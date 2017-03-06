@@ -115,13 +115,18 @@ public class MainActivity
         super.onStart();
         sensorsManager.start();
         sensorsManager.setScreenRotation(getWindowManager().getDefaultDisplay().getRotation());
-        locationManager.start();
 
+        MainActivityPermissionsDispatcher.startLocationManagerWithCheck(this);
         MainActivityPermissionsDispatcher.startBleScanWithCheck(this);
 
         speedAnimator = initBarGraphAnimator(binding.content.speed, binding.content.speedGraph);
         cadenceAnimator = initBarGraphAnimator(binding.content.cadence, binding.content.cadenceGraph);
         clockAnimator = initClockAnimator(binding.content.clock);
+    }
+
+    @NeedsPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+    void startLocationManager() {
+        locationManager.start();
     }
 
     @Override
